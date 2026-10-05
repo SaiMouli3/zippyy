@@ -11,6 +11,7 @@ TODAY = date(2026, 10, 5)  # a Monday
 ORDER = {"delivery_pincode": "110001"}
 
 
+
 # -- rate normalization: three different carrier shapes -> one internal shape
 def test_rate_normalization_fastship():
     r = FastShipAdapter.normalize_rates({"service": "FAST-AIR", "price": 182.90, "etaDays": 2})[0]
@@ -72,3 +73,29 @@ def test_rules_require_approval():
 def test_rules_unknown_and_low_confidence():
     assert decide("blah").outcome == rules.NEEDS_CLARIFICATION
     assert decide("yes").outcome == rules.ALLOWED  # 0.7 >= threshold, defaults to next day
+
+
+# -- cache key + transition rules (pure)
+def test_cache_key_contains_every_pricing_input_and_changes_with_each():
+    from app.services.rates import cache_key
+    base = {"merchant_id": "MRC-100", "pickup_pincode": "560001", "delivery_pincode": "110001",
+            "weight_grams": 1500, "length_cm": 20, "width_cm": 15, "height_cm": 10,
+            "payment_mode": "COD", "cod_amount": 2500.0}
+    assert cache_key(base) == "zippy:rates:MRC-100:560001:110001:1500:20:15:10:COD:2500"
+    seen = {cache_key(base)}
+    for field, value in [("merchant_id", "MRC-200"), ("pickup_pincode", "560002"), ("delivery_pincode", "110002"),
+                         ("weight_grams", 1501), ("length_cm", 21), ("width_cm", 16), ("height_cm", 11),
+                         ("payment_mode", "PREPAID"), ("cod_amount", 2501.0)]:
+        k = cache_key({**base, field: value})
+        assert k not in seen, field
+        seen.add(k)
+    assert cache_key({**base, "cod_amount": 99.5}).endswith(":COD:99.50")
+
+
+def test_transition_rules():
+    from app.transitions import is_valid
+    assert is_valid("SHIPMENT_CREATED", "PICKED_UP") and is_valid("PICKED_UP", "OUT_FOR_DELIVERY")
+    assert is_valid("OUT_FOR_DELIVERY", "NDR") and is_valid("NDR", "OUT_FOR_DELIVERY") and is_valid("NDR", "DELIVERED")
+    assert not is_valid("DELIVERED", "IN_TRANSIT") and not is_valid("DELIVERED", "NDR")
+    assert not is_valid("IN_TRANSIT", "PICKED_UP") and not is_valid("IN_TRANSIT", "IN_TRANSIT")
+    assert not is_valid("NDR", "NDR") and not is_valid("SHIPMENT_CREATED", "DELIVERED")

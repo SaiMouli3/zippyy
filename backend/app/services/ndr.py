@@ -1,6 +1,7 @@
 from psycopg.types.json import Jsonb
 
 from .. import db, rules
+from ..logs import log
 from ..ai.intent import extractor
 from ..carriers.registry import BY_CODE
 from ..util import ApiError
@@ -98,6 +99,8 @@ def buyer_message(case_id: str, text: str) -> dict:
 
         intent = extractor.extract(text).model_dump()
         db.audit(c, "INTENT_EXTRACTED", "ndr_case", case_id, intent)
+        log("INTENT_EXTRACTED", orderId=case["order_id"], shipmentId=case["shipment_id"], carrier=case["carrier"],
+            ndrCaseId=case_id, intent=intent["intent"])
 
         order = {"delivery_pincode": case["delivery_pincode"]}
         decision = rules.evaluate(intent, order).to_dict()
@@ -130,6 +133,8 @@ def reattempt(case_id: str) -> dict:
         # Safety rule: only claim what is true - the request is submitted, not confirmed.
         _msg(c, case_id, "AGENT", "Your reattempt request has been submitted to the carrier.")
         db.audit(c, "CARRIER_ACTION_SUBMITTED", "ndr_case", case_id, request)
+        log("CARRIER_ACTION_SUBMITTED", orderId=case["order_id"], shipmentId=case["shipment_id"], carrier=case["carrier"],
+            ndrCaseId=case_id)
         adapter = BY_CODE[case["carrier"]]
 
     # --- 2. call the carrier outside any transaction
@@ -148,6 +153,8 @@ def reattempt(case_id: str) -> dict:
             c.execute("UPDATE ndr_cases SET status='CARRIER_ACCEPTED', updated_at=now() WHERE id=%s", (case_id,))
             _msg(c, case_id, "AGENT", "The carrier has accepted the reattempt request.")
             db.audit(c, "CARRIER_ACTION_ACCEPTED", "ndr_case", case_id, resp)
+            log("CARRIER_ACTION_ACCEPTED", orderId=case["order_id"], shipmentId=case["shipment_id"],
+                carrier=case["carrier"], ndrCaseId=case_id)
             c.execute("UPDATE ndr_cases SET status='RESOLVED', resolved_at=now(), updated_at=now() WHERE id=%s", (case_id,))
         else:
             c.execute("UPDATE carrier_actions SET status='REJECTED', response=%s, updated_at=now() WHERE id=%s",
@@ -155,4 +162,6 @@ def reattempt(case_id: str) -> dict:
             c.execute("UPDATE ndr_cases SET status='ACTION_FAILED', updated_at=now() WHERE id=%s", (case_id,))
             _msg(c, case_id, "AGENT", "The carrier could not confirm the reattempt yet. Our team will follow up with you.")
             db.audit(c, "CARRIER_ACTION_REJECTED", "ndr_case", case_id, resp)
+            log("CARRIER_ACTION_REJECTED", level="warning", orderId=case["order_id"],
+                shipmentId=case["shipment_id"], carrier=case["carrier"], ndrCaseId=case_id)
     return case_detail(case_id)

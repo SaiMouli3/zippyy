@@ -7,7 +7,9 @@ export default function Rates() {
   const { id } = useParams()
   const nav = useNavigate()
   const { data: order, reload } = useFetch<any>(`/api/orders/${id}`)
-  const [res, setRes] = useState<{ rates: Rate[]; cached: boolean; errors: { carrier: string; error: string }[] } | null>(null)
+  const [res, setRes] = useState<{ rates: Rate[]; cached: boolean; cacheStatus: string; cacheKey: string; partial: boolean;
+    errors: { carrier: string; code: string; message: string; durationMs: number }[] } | null>(null)
+  const [sort, setSort] = useState<'price' | 'eta' | 'carrier'>('price')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -30,21 +32,30 @@ export default function Rates() {
   }
   const eta = (r: Rate) => (r.etaMinDays === r.etaMaxDays ? `${r.etaMaxDays} days` : `${r.etaMinDays}–${r.etaMaxDays} days`)
   const cheapest = res ? Math.min(...res.rates.map((r) => r.price)) : 0
+  const sorted = res ? [...res.rates].sort((a, b) =>
+    sort === 'price' ? a.price - b.price : sort === 'eta' ? a.etaMaxDays - b.etaMaxDays || a.price - b.price : a.carrierName.localeCompare(b.carrierName)) : []
+  const cacheLabel: Record<string, string> = { HIT: 'Served from Redis cache', MISS: 'Live from carriers (cache miss)', REFRESH: 'Live from carriers (refreshed)',
+    UNAVAILABLE: 'Live from carriers (Redis unavailable — caching skipped)' }
 
   return (
     <>
-      <PageTitle title={`Shipping rates · ${id}`} sub={order && `${order.customerName} · ${order.pickupPincode} → ${order.deliveryPincode} · ${order.weightKg} kg · ${order.paymentMode}${order.paymentMode === 'COD' ? ` ₹${order.codAmount}` : ''}`} />
+      <PageTitle title={`Shipping rates · ${id}`} sub={order && `${order.customerName} · ${order.pickupPincode} → ${order.deliveryPincode} · ${order.weightGrams} g · ${order.lengthCm}×${order.widthCm}×${order.heightCm} cm · ${order.paymentMode}${order.paymentMode === 'COD' ? ` ₹${order.codAmount}` : ''}`} />
       <ErrorBox error={error} />
       {res?.errors.map((e) => (
-        <div key={e.carrier} className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
-          {CARRIER_NAMES[e.carrier]} is unavailable right now — showing the other carriers.
+        <div key={e.carrier} data-testid="carrier-failure" className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+          <b>{CARRIER_NAMES[e.carrier]}</b> failed ({e.code}{e.durationMs ? `, ${Math.round(e.durationMs)} ms` : ''}): {e.message}. Showing the other carriers.
         </div>))}
       <div className="mb-4 flex items-center gap-3">
         <Btn kind="ghost" onClick={() => fetchRates(true)} disabled={busy}>{busy ? 'Fetching…' : 'Refresh rates'}</Btn>
-        {res && <span className="text-xs text-slate-500">{res.cached ? 'Served from Redis cache (5 min TTL)' : 'Live from carriers'}</span>}
+        {res && <span data-testid="cache-status" title={res.cacheKey} className="text-xs text-slate-500">{cacheLabel[res.cacheStatus] ?? res.cacheStatus}{res.partial ? ' · partial result' : ''}</span>}
+        <label className="ml-auto text-sm text-slate-600">Sort by{' '}
+          <select data-testid="sort" className="rounded-lg border border-slate-300 px-2 py-1" value={sort} onChange={(e) => setSort(e.target.value as any)}>
+            <option value="price">Price (low → high)</option><option value="eta">Delivery time (fastest)</option><option value="carrier">Carrier name</option>
+          </select></label>
       </div>
+      {res && <p className="mb-3 break-all font-mono text-[11px] text-slate-400">cache key: {res.cacheKey}</p>}
       <div className="grid max-w-5xl gap-4 md:grid-cols-3">
-        {res?.rates.map((r) => {
+        {sorted.map((r) => {
           const chosen = order?.selectedCarrier === r.carrier && order?.selectedService === r.service
           return (
             <Card key={r.carrier + r.service} className={chosen ? 'ring-2 ring-indigo-500' : ''}>

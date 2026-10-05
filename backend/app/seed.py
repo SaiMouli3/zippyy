@@ -9,11 +9,11 @@ def seed() -> None:
         c.execute("INSERT INTO merchants(id,name) VALUES ('MER-DEMO','Demo Merchant') ON CONFLICT DO NOTHING")
         if c.execute("SELECT 1 FROM orders LIMIT 1").fetchone():
             return
-        c.execute("""INSERT INTO orders(id, merchant_id, customer_name, phone, address, pickup_pincode,
-                         delivery_pincode, weight_kg, payment_mode, cod_amount, status,
-                         selected_carrier, selected_service, quoted_price)
-                     VALUES (('ZPY-ORD-' || nextval('order_seq')), 'MER-DEMO','Rahul Sharma','9876543210',
-                         '12 MG Road, Connaught Place, New Delhi','560001','110001',1.5,'COD',2500,'SHIPPED',
+        c.execute("""INSERT INTO orders(id, merchant_id, merchant_order_id, customer_name, phone, address,
+                         pickup_pincode, delivery_pincode, weight_grams, length_cm, width_cm, height_cm,
+                         payment_mode, cod_amount, status, selected_carrier, selected_service, quoted_price)
+                     VALUES (('ZPY-ORD-' || nextval('order_seq')), 'MER-DEMO','DEMO-1001','Rahul Sharma','9876543210',
+                         '12 MG Road, Connaught Place, New Delhi','560001','110001',1500,20,15,10,'COD',2500,'SHIPPED',
                          'FASTSHIP','FAST-AIR',182.90)""")
         oid = c.execute("SELECT id FROM orders").fetchone()["id"]
         for carrier, svc, name, price, lo, hi in [

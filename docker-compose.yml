@@ -28,7 +28,16 @@ services:
       REDIS_URL: redis://redis:6379/0
       # Mock carriers are served by this same process; adapters call them over HTTP.
       CARRIER_BASE_URL: http://127.0.0.1:8000
+      FASTSHIP_BASE_URL: http://127.0.0.1:8000/mock/fastship
+      QUICKEXPRESS_BASE_URL: http://127.0.0.1:8000/mock/quickexpress
+      RELIABLE_BASE_URL: http://127.0.0.1:8000/mock/reliable
       WEBHOOK_BASE_URL: http://127.0.0.1:8000
+      CARRIER_TIMEOUT_MS: "3000"
+      RATE_CACHE_TTL: "300"
+      PARTIAL_RATE_CACHE_TTL: "60"
+      DEFAULT_MERCHANT_ID: MER-DEMO
+      SEED_DEMO: "true"
+      LOG_LEVEL: INFO
     ports:
       - "8000:8000"
     depends_on:

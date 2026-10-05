@@ -18,7 +18,7 @@ function Picker() {
 export default function Tracking() {
   const { id } = useParams()
   const nav = useNavigate()
-  const { data, error } = useFetch<any>(id ? `/api/orders/${id}/tracking` : null, 3000)
+  const { data, error } = useFetch<any>(id ? `/api/orders/${id}/tracking?includeRaw=true` : null, 3000)
   if (!id) return (<><PageTitle title="Shipment Tracking" /><Picker /></>)
   const seen = new Set<string>(data?.statusHistory.map((h: any) => h.status))
   return (
@@ -41,9 +41,12 @@ export default function Tracking() {
           <Card title="Status history">
             <ul className="space-y-2">
               {data.statusHistory.map((h: any, i: number) => (
-                <li key={i} className="flex items-center justify-between border-b border-slate-100 pb-2 text-sm">
+                <li key={i} className="flex flex-wrap items-center justify-between border-b border-slate-100 pb-2 text-sm">
                   <span><Badge value={h.status} />{h.reason && <span className="ml-2 text-slate-500">{nice(h.reason)}</span>}</span>
                   <span className="text-xs text-slate-400">{ago(h.occurredAt)}</span>
+                  {h.raw && h.normalized && h.raw.source !== 'zippy' && (
+                    <details className="mt-1 w-full text-xs text-slate-500"><summary className="cursor-pointer">raw / normalized</summary>
+                      <pre className="overflow-x-auto">raw: {JSON.stringify(h.raw)}{'\n'}normalized: {JSON.stringify(h.normalized)}</pre></details>)}
                 </li>))}
             </ul>
             <div className="mt-4 flex gap-3 text-sm">

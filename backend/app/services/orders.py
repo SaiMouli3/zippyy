@@ -1,9 +1,10 @@
-from psycopg.types.json import Jsonb  # noqa: F401
-
-from .. import db
+from .. import config, db
+from ..logs import log
 from ..util import ApiError
 
-MERCHANT_ID = "MER-DEMO"
+# Fields that define "the same order" for idempotent replays.
+_SIGNATURE = ("customer_name", "phone", "pickup_pincode", "delivery_pincode", "weight_grams",
+              "length_cm", "width_cm", "height_cm", "payment_mode", "cod_amount")
 
 
 def get_order(c, order_id: str, lock: bool = False) -> dict:
@@ -13,21 +14,50 @@ def get_order(c, order_id: str, lock: bool = False) -> dict:
     return row
 
 
-def create_order(data: dict) -> dict:
+def _existing(c, merchant_id: str, merchant_order_id: str) -> dict | None:
+    return c.execute("SELECT * FROM orders WHERE merchant_id=%s AND merchant_order_id=%s",
+                     (merchant_id, merchant_order_id)).fetchone()
+
+
+def _replay(existing: dict, data: dict) -> tuple[dict, bool]:
+    diff = [k for k in _SIGNATURE if existing[k] != data[k]]
+    if diff:
+        raise ApiError(409, f"merchantOrderId '{existing['merchant_order_id']}' was already used for order "
+                            f"{existing['id']} with different details", existingOrderId=existing["id"],
+                       differingFields=diff)
+    log("ORDER_DUPLICATE", orderId=existing["id"], merchantId=existing["merchant_id"])
+    return existing, True
+
+
+def create_order(data: dict) -> tuple[dict, bool]:
+    """Returns (order, duplicate). Idempotent on (merchantId, merchantOrderId)."""
+    data = dict(data)
+    data["merchant_id"] = data.get("merchant_id") or config.DEFAULT_MERCHANT_ID
+    moid = data.get("merchant_order_id")
     if data["payment_mode"] == "COD" and data["cod_amount"] <= 0:
         raise ApiError(422, "COD orders need a codAmount > 0")
     if data["payment_mode"] == "PREPAID":
         data["cod_amount"] = 0
     with db.conn() as c:
+        c.execute("INSERT INTO merchants(id, name) VALUES (%s,%s) ON CONFLICT DO NOTHING",
+                  (data["merchant_id"], data["merchant_id"]))
+        if moid and (ex := _existing(c, data["merchant_id"], moid)):
+            return _replay(ex, data)
         row = c.execute(
-            """INSERT INTO orders(id, merchant_id, customer_name, phone, address, pickup_pincode,
-                   delivery_pincode, weight_kg, payment_mode, cod_amount)
-               VALUES ('ZPY-ORD-' || nextval('order_seq'), %s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *""",
-            (MERCHANT_ID, data["customer_name"], data["phone"], data.get("address", ""),
-             data["pickup_pincode"], data["delivery_pincode"], data["weight_kg"],
-             data["payment_mode"], data["cod_amount"])).fetchone()
-        db.audit(c, "ORDER_CREATED", "order", row["id"], {"customer": row["customer_name"]})
-        return row
+            """INSERT INTO orders(id, merchant_id, merchant_order_id, customer_name, phone, address,
+                   pickup_pincode, delivery_pincode, weight_grams, length_cm, width_cm, height_cm,
+                   payment_mode, cod_amount)
+               VALUES ('ZPY-ORD-' || nextval('order_seq'), %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+               ON CONFLICT (merchant_id, merchant_order_id) WHERE merchant_order_id IS NOT NULL DO NOTHING
+               RETURNING *""",
+            (data["merchant_id"], moid, data["customer_name"], data["phone"], data.get("address", ""),
+             data["pickup_pincode"], data["delivery_pincode"], data["weight_grams"], data["length_cm"],
+             data["width_cm"], data["height_cm"], data["payment_mode"], data["cod_amount"])).fetchone()
+        if row is None:  # lost a race with a concurrent identical request
+            return _replay(_existing(c, data["merchant_id"], moid), data)
+        db.audit(c, "ORDER_CREATED", "order", row["id"], {"customer": row["customer_name"], "merchantOrderId": moid})
+        log("ORDER_CREATED", orderId=row["id"], merchantId=row["merchant_id"])
+        return row, False
 
 
 def list_orders() -> list[dict]:

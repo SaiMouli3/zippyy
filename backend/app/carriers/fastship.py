@@ -1,4 +1,4 @@
-from .base import CarrierAdapter, NormalizedRate, ReattemptResult, ShipmentResult, WebhookEvent, http
+from .base import CarrierAdapter, NormalizedRate, ReattemptResult, ShipmentResult, WebhookEvent
 
 SERVICE_NAMES = {"FAST-AIR": "Fast Air"}
 STATUS = {"PKD": "PICKED_UP", "INT": "IN_TRANSIT", "OFD": "OUT_FOR_DELIVERY", "DLV": "DELIVERED", "NDR": "NDR"}
@@ -17,20 +17,19 @@ class FastShipAdapter(CarrierAdapter):
                                etaMinDays=raw["etaDays"], etaMaxDays=raw["etaDays"])]
 
     def get_rates(self, order):
-        r = http.post(f"{self.base}/rates", json={
+        d = self.call("RATE_REQUEST", "POST", "/rates", order["id"], json={
             "origin": order["pickup_pincode"], "destination": order["delivery_pincode"],
-            "weightKg": order["weight_kg"], "cod": order["payment_mode"] == "COD"})
-        r.raise_for_status()
-        return self.normalize_rates(r.json())
+            "weightGrams": order["weight_grams"],
+            "dimensions": {"lengthCm": order["length_cm"], "widthCm": order["width_cm"], "heightCm": order["height_cm"]},
+            "cod": order["payment_mode"] == "COD", "codAmount": order["cod_amount"]})
+        return self.normalize_rates(d)
 
     def create_shipment(self, order, service):
-        r = http.post(f"{self.base}/shipments", json={
+        d = self.call("CREATE_SHIPMENT", "POST", "/shipments", order["id"], json={
             "orderRef": order["id"], "service": service,
             "consignee": {"name": order["customer_name"], "phone": order["phone"],
                           "pincode": order["delivery_pincode"]},
-            "codAmount": order["cod_amount"], "weightKg": order["weight_kg"]})
-        r.raise_for_status()
-        d = r.json()
+            "codAmount": order["cod_amount"], "weightGrams": order["weight_grams"]})
         return ShipmentResult(d["shipmentId"], d["awb"])
 
     def parse_webhook(self, p):
@@ -38,9 +37,7 @@ class FastShipAdapter(CarrierAdapter):
                             REASON.get(p.get("reasonCode")))
 
     def request_reattempt(self, tracking_number, requested_date, window, attempt):
-        r = http.post(f"{self.base}/ndr-action", json={
+        d = self.call("NDR_REATTEMPT", "POST", "/ndr-action", json={
             "awb": tracking_number, "action": "REATTEMPT", "date": requested_date,
             "slot": window, "attempt": attempt})
-        r.raise_for_status()
-        d = r.json()
         return ReattemptResult(d["status"], d["message"], d)

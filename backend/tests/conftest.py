@@ -13,6 +13,10 @@ os.environ.update({
     "REDIS_URL": os.environ.get("TEST_REDIS_URL", "redis://localhost:6379/15"),
     "CARRIER_BASE_URL": f"http://127.0.0.1:{PORT}",
     "WEBHOOK_BASE_URL": f"http://127.0.0.1:{PORT}",
+    # set explicitly so a surrounding environment (e.g. the compose container) cannot redirect the test carriers
+    "FASTSHIP_BASE_URL": f"http://127.0.0.1:{PORT}/mock/fastship",
+    "QUICKEXPRESS_BASE_URL": f"http://127.0.0.1:{PORT}/mock/quickexpress",
+    "RELIABLE_BASE_URL": f"http://127.0.0.1:{PORT}/mock/reliable",
     "SEED_DEMO": "true",
 })
 
@@ -52,14 +56,44 @@ def api(server):
         yield c
 
 
-ORDER = {"customerName": "Rahul Sharma", "phone": "9876543210", "address": "12 MG Road, Delhi",
-         "pickupPincode": "560001", "deliveryPincode": "110001", "weightKg": 1.5,
+import uuid
+
+ORDER = {"merchantId": "MRC-100", "customerName": "Rahul Sharma", "phone": "9876543210",
+         "address": "12 MG Road, Delhi", "pickupPincode": "560001", "deliveryPincode": "110001",
+         "weightGrams": 1500, "lengthCm": 20, "widthCm": 15, "heightCm": 10,
          "paymentMode": "COD", "codAmount": 2500}
+
+
+def new_order_body(**over):
+    return {**ORDER, "merchantOrderId": f"T-{uuid.uuid4().hex[:10]}", **over}
+
+
+@pytest.fixture(autouse=True)
+def _clean_redis(server):
+    import redis
+    redis.Redis.from_url(os.environ["REDIS_URL"]).flushdb()
+
+
+@pytest.fixture
+def logs(server):
+    """Captures structured log records emitted by the app (same process as the test server)."""
+    import logging
+    records = []
+
+    class H(logging.Handler):
+        def emit(self, record):
+            from app.logs import request_id_var
+            records.append({"requestId": request_id_var.get(), **getattr(record, "fields", {})})
+
+    h = H()
+    logging.getLogger("zippy").addHandler(h)
+    yield records
+    logging.getLogger("zippy").removeHandler(h)
 
 
 @pytest.fixture
 def order(api):
-    r = api.post("/api/orders", json=ORDER)
+    r = api.post("/api/orders", json=new_order_body())
     assert r.status_code == 201, r.text
     return r.json()
 
