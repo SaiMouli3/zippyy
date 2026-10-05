@@ -30,10 +30,13 @@ async def _gate(slug: str):
 
 def _chargeable_kg(grams: float, l: float, w: float, h: float, divisor: float) -> float:
     """Carriers bill the greater of actual and volumetric weight (each uses its own divisor)."""
+    # A shipment is charged by the larger of: actual weight and box-volume weight.
+    # This simulates real courier billing, where bulky but light packages still cost more.
     return max(grams / 1000, l * w * h / divisor)
 
 
 def _zone_factor(origin: str, dest: str) -> float:
+    # Distance affects price. If the pickup and delivery pincode are far apart, the final price is higher.
     gap = abs(int(origin[0]) - int(dest[0]))
     return 1.0 + 0.05 * max(0, gap - 4) + (0.0 if gap > 0 else -0.1)
 
@@ -69,6 +72,7 @@ async def get_failures():
 # JSON, camelCase, flat single-service response.
 @router.post("/mock/fastship/rates")
 async def fastship_rates(req: Request):
+    # FastShip pricing: base charge + weight charge + distance multiplier.
     await _gate("fastship")
     b = await req.json()
     d = b["dimensions"]
@@ -99,6 +103,7 @@ async def fastship_ndr(req: Request):
 # snake_case, grams, nested booking envelope.
 @router.post("/mock/quickexpress/rates")
 async def quick_rates(req: Request):
+    # QuickExpress uses a slightly higher base price and a different volumetric divisor.
     await _gate("quickexpress")
     b = await req.json()
     d = b["dimensions_cm"]
@@ -129,6 +134,7 @@ async def quick_ndr(tracking: str, req: Request):
 # GET with query params, list of options, different field names again.
 @router.get("/mock/reliable/rates")
 async def reliable_rates(pickup: str, drop: str, wt: float, l: int, b: int, h: int):
+    # Reliable is the cheapest mock carrier and uses a different volumetric divisor.
     await _gate("reliable")
     kg = _chargeable_kg(wt * 1000, l, b, h, 6000)
     price = (99.30 + 40.0 * kg) * _zone_factor(pickup, drop)

@@ -5,3 +5,7 @@ __pycache__
 *.log
 .env
 dump.rdb
+.next
+next-env.d.ts
+*.db
+.venv

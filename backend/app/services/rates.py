@@ -30,6 +30,9 @@ def _fmt_amount(v: float) -> str:
 
 
 def cache_key(order: dict) -> str:
+    # The cache key includes every pricing input. This ensures that two orders with identical inputs
+    # share the same quote, while any change in pickup/delivery dimensions, COD amount, or payment
+    # mode produces a different key and therefore a different cached result.
     return ":".join(["zippy:rates", order["merchant_id"], order["pickup_pincode"], order["delivery_pincode"],
                      str(order["weight_grams"]), str(order["length_cm"]), str(order["width_cm"]),
                      str(order["height_cm"]), order["payment_mode"], _fmt_amount(order["cod_amount"])])
@@ -37,6 +40,8 @@ def cache_key(order: dict) -> str:
 
 def _cache_get(key: str, order_id: str):
     """-> (status, value) with status HIT | MISS | UNAVAILABLE."""
+    # Redis is treated as an optimization layer, not as a hard dependency. If the cache cannot be
+    # reached, we log the issue and continue by querying carriers live.
     try:
         raw = _redis.get(key)
     except redis.RedisError as e:
@@ -50,6 +55,8 @@ def _cache_get(key: str, order_id: str):
 
 
 def _cache_set(key: str, order_id: str, value: dict, ttl: int) -> bool:
+    # A failed cache write should never break the request. The customer still gets rates even if the
+    # cache is temporarily unavailable.
     try:
         _redis.set(key, json.dumps(value), ex=ttl)
         return True
@@ -67,11 +74,14 @@ def _drop(key: str):
 
 def _fetch_all(order: dict) -> tuple[list[dict], list[dict]]:
     """Call every carrier concurrently, bounded by CARRIER_TIMEOUT_MS. Never raises for a carrier failure."""
+    # We use a hard deadline to avoid one slow carrier blocking the whole response. This keeps the
+    # request responsive even when an adapter hangs or is delayed.
     deadline = config.CARRIER_TIMEOUT_MS / 1000 + 1.0  # hard stop on top of the per-request httpx timeout
     ex = ThreadPoolExecutor(max_workers=len(ADAPTERS))
     start = time.perf_counter()
     futures = {}
     for a in ADAPTERS:
+        # Copy the request context into each worker so the log correlation ID still follows the request.
         ctx = contextvars.copy_context()  # keep requestId in logs from worker threads
         futures[ex.submit(ctx.run, a.get_rates, order)] = a
     done, pending = wait(futures, timeout=deadline)
@@ -94,6 +104,8 @@ def _fetch_all(order: dict) -> tuple[list[dict], list[dict]]:
 
 def _store_quotes(order_id: str, rates: list[dict]):
     """Persist the quotes the order may later select from. Frozen once a shipment exists."""
+    # These quotes are the server-side source of truth for a later carrier selection. Once a shipment
+    # is created, we lock the row and stop refreshing the quote list, so the chosen carrier stays stable.
     with db.conn() as c:
         get_order(c, order_id, lock=True)  # serialise concurrent refreshes (double-submit)
         if c.execute("SELECT 1 FROM shipments WHERE order_id=%s", (order_id,)).fetchone():
@@ -108,6 +120,7 @@ def _store_quotes(order_id: str, rates: list[dict]):
 
 
 def get_rates(order_id: str, refresh: bool = False) -> dict:
+    # Load the live order first so the cache key reflects the current order dimensions and payment data.
     with db.conn() as c:
         order = get_order(c, order_id)
     key = cache_key(order)
@@ -115,12 +128,15 @@ def get_rates(order_id: str, refresh: bool = False) -> dict:
 
     cache_status = "REFRESH" if refresh else None
     if not refresh:
+        # Serve a cached quote when available. If a cached result exists, we still hydrate the DB quote
+        # table so the order has a server-side quote set to select later.
         cache_status, hit = _cache_get(key, order_id)
         if hit:
             _store_quotes(order_id, hit["rates"])
             return {"rates": hit["rates"], "errors": hit["errors"], "partial": bool(hit["errors"]),
                     "cached": True, "cacheStatus": "HIT", "cacheKey": key}
 
+    # Cache miss or manual refresh -> query all carriers live and aggregate their results.
     rates, errors = _fetch_all(order)
     if not rates:
         log("RATE_REQUEST_FAILED", level="error", orderId=order_id, errors=errors)
@@ -142,6 +158,8 @@ def get_rates(order_id: str, refresh: bool = False) -> dict:
 
 
 def select_carrier(order_id: str, carrier: str, service: str, price: float | None = None) -> dict:
+    # This is the authorization step for choosing a quote. The client can suggest a selection, but the
+    # server must only accept a quote stored against this order to prevent tampering or stale pricing.
     if carrier not in BY_CODE:
         raise ApiError(400, f"Unknown carrier {carrier}")
     with db.conn() as c:
