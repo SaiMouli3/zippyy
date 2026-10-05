@@ -1,0 +1,55 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-zippy}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-zippy}
+      POSTGRES_DB: ${POSTGRES_DB:-zippy}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-zippy}"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-zippy}:${POSTGRES_PASSWORD:-zippy}@postgres:5432/${POSTGRES_DB:-zippy}
+      REDIS_URL: redis://redis:6379/0
+      # Mock carriers live in this same container, so "carrier" and "Zippy public" URLs point at ourselves.
+      CARRIER_BASE_URL: http://localhost:8000
+      ZIPPY_PUBLIC_URL: http://localhost:8000
+      CARRIER_RATE_TIMEOUT_SECONDS: ${CARRIER_RATE_TIMEOUT_SECONDS:-2.5}
+      CARRIER_BOOKING_TIMEOUT_SECONDS: ${CARRIER_BOOKING_TIMEOUT_SECONDS:-5}
+      RATE_CACHE_TTL_SECONDS: ${RATE_CACHE_TTL_SECONDS:-300}
+      CORS_ORIGINS: http://localhost:3000
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
