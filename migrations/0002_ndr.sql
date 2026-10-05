@@ -85,7 +85,7 @@ CREATE TABLE ndr_events (
     actor_type    TEXT NOT NULL,
     description   TEXT NOT NULL,
     data          JSONB,
-    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
 );
 CREATE INDEX ndr_events_case_idx ON ndr_events(ndr_case_id, created_at);
 
@@ -96,7 +96,7 @@ CREATE TABLE communication_attempts (
     status        TEXT NOT NULL CHECK (status IN ('SENT','DELIVERED','FAILED','DEFERRED')),
     error         TEXT,
     provider_ref  TEXT,
-    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
 );
 CREATE INDEX communication_attempts_case_idx ON communication_attempts(ndr_case_id, created_at);
 
@@ -112,7 +112,7 @@ CREATE TABLE conversation_messages (
     interpretation     JSONB,
     delivery_status    TEXT NOT NULL DEFAULT 'SENT',
     processed          BOOLEAN NOT NULL DEFAULT FALSE,
-    created_at         TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at         TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
 );
 CREATE INDEX conversation_messages_case_idx ON conversation_messages(ndr_case_id, created_at);
 
@@ -170,7 +170,7 @@ CREATE TABLE audit_logs (
     request_payload  JSONB,
     response_payload JSONB,
     request_id       TEXT,
-    created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
 );
 CREATE INDEX audit_logs_case_idx ON audit_logs(ndr_case_id, created_at);
 CREATE INDEX audit_logs_order_idx ON audit_logs(order_id, created_at);

@@ -38,7 +38,7 @@ var ErrChannelFailed = errors.New("channel delivery failed")
 var seq atomic.Int64
 
 // MockProvider always "delivers" unless the destination is a designated unreachable test number
-// (ending 0000) or the dispatcher was told to simulate an outage for this channel.
+// (ending 0000, which fails on every channel) or the dispatcher was told to simulate an outage for this channel.
 type MockProvider struct {
 	channel string
 }
@@ -48,7 +48,7 @@ func NewMock(channel string) *MockProvider { return &MockProvider{channel: chann
 func (p *MockProvider) Channel() string { return p.channel }
 
 func (p *MockProvider) Send(_ context.Context, m Message) (Result, error) {
-	if strings.HasSuffix(m.To, "0000") && p.channel != IVR {
+	if strings.HasSuffix(m.To, "0000") {
 		return Result{}, fmt.Errorf("%w: %s number %s is not reachable", ErrChannelFailed, p.channel, m.To)
 	}
 	status := "SENT"

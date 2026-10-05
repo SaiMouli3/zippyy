@@ -83,6 +83,13 @@ func (a *Aggregator) GetRates(ctx context.Context, order domain.Order, refresh b
 	v, err, shared := a.sf.Do(sfKey, func() (any, error) {
 		// The shared flight must not die because the first caller's request was cancelled.
 		fctx := context.WithoutCancel(ctx)
+		if !refresh {
+			// double-checked: a flight that finished while we were queued has already filled the cache
+			if res, raws, err := a.cache.Get(fctx, key); err == nil && res != nil && res.ExpiresAt.After(a.now()) {
+				a.metrics.Inc("rate_cache_hits_total")
+				return Result{RateResult: *res, CacheKey: key, Raws: raws}, nil
+			}
+		}
 		return a.fetch(fctx, order, key)
 	})
 	if err != nil {

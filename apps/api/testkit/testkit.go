@@ -138,11 +138,11 @@ func (e *Env) reset() {
 	  DELETE FROM seller_rules WHERE merchant_id <> 'MRC-100';
 	  UPDATE seller_rules SET max_attempts=3, auto_rto_attempt=3, cod_limit=10000, allowed_channels='{WHATSAPP,IVR,SMS}', enforce_comm_hours=FALSE, prepaid_conversion_allowed=TRUE,
 	    allow_address_changes=TRUE, early_rto_policy='APPROVAL', allowed_actions='{REQUEST_REATTEMPT,RESCHEDULE,UPDATE_PHONE,UPDATE_ADDRESS,CONVERT_TO_PREPAID,INITIATE_RTO}', default_on_silence='RTO' WHERE merchant_id='MRC-100';
-	  UPDATE carrier_rules SET max_attempts=3, instruction_cutoff='23:59', hold_window_days=7, supported_actions='{REQUEST_REATTEMPT,RESCHEDULE,UPDATE_PHONE,UPDATE_ADDRESS,CONVERT_TO_PREPAID,INITIATE_RTO}',
+	  UPDATE carrier_rules SET max_attempts=3, instruction_cutoff='24:00', hold_window_days=7, supported_actions='{REQUEST_REATTEMPT,RESCHEDULE,UPDATE_PHONE,UPDATE_ADDRESS,CONVERT_TO_PREPAID,INITIATE_RTO}',
 	    supports_time_slot=TRUE, can_change_payment_mode=TRUE, can_change_address=TRUE, can_change_phone=TRUE WHERE carrier_code='FASTSHIP';
-	  UPDATE carrier_rules SET max_attempts=3, instruction_cutoff='22:00', hold_window_days=5, supported_actions='{REQUEST_REATTEMPT,RESCHEDULE,UPDATE_PHONE,UPDATE_ADDRESS,INITIATE_RTO}',
+	  UPDATE carrier_rules SET max_attempts=3, instruction_cutoff='24:00', hold_window_days=5, supported_actions='{REQUEST_REATTEMPT,RESCHEDULE,UPDATE_PHONE,UPDATE_ADDRESS,INITIATE_RTO}',
 	    supports_time_slot=TRUE, can_change_payment_mode=FALSE, can_change_address=TRUE, can_change_phone=TRUE WHERE carrier_code='QUICKEXPRESS';
-	  UPDATE carrier_rules SET max_attempts=2, instruction_cutoff='20:00', hold_window_days=4, supported_actions='{REQUEST_REATTEMPT,RESCHEDULE,UPDATE_PHONE,CONVERT_TO_PREPAID,INITIATE_RTO}',
+	  UPDATE carrier_rules SET max_attempts=2, instruction_cutoff='24:00', hold_window_days=4, supported_actions='{REQUEST_REATTEMPT,RESCHEDULE,UPDATE_PHONE,CONVERT_TO_PREPAID,INITIATE_RTO}',
 	    supports_time_slot=FALSE, can_change_payment_mode=TRUE, can_change_address=FALSE, can_change_phone=TRUE WHERE carrier_code='RELIABLE';`)
 	if err != nil {
 		e.T.Fatalf("reset rules: %v", err)

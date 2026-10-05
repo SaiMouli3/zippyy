@@ -25,14 +25,14 @@ func TestOrderCreationValid(t *testing.T) {
 func TestOrderValidation(t *testing.T) {
 	e := testkit.New(t, testkit.Options{})
 	cases := map[string]func(m map[string]any){
-		"customer.phone":       func(m map[string]any) { m["customer"].(map[string]any)["phone"] = "12345" },
+		"customer.phone":          func(m map[string]any) { m["customer"].(map[string]any)["phone"] = "12345" },
 		"deliveryAddress.pincode": func(m map[string]any) { m["deliveryAddress"].(map[string]any)["pincode"] = "0123" },
-		"package.weightGrams":  func(m map[string]any) { m["package"].(map[string]any)["weightGrams"] = 0 },
-		"package.lengthCm":     func(m map[string]any) { m["package"].(map[string]any)["lengthCm"] = -1 },
-		"codAmount":            func(m map[string]any) { m["codAmount"] = 0 },
-		"paymentType":          func(m map[string]any) { m["paymentType"] = "BARTER" },
-		"merchantOrderId":      func(m map[string]any) { m["merchantOrderId"] = "" },
-		"customer.name":        func(m map[string]any) { m["customer"].(map[string]any)["name"] = " " },
+		"package.weightGrams":     func(m map[string]any) { m["package"].(map[string]any)["weightGrams"] = 0 },
+		"package.lengthCm":        func(m map[string]any) { m["package"].(map[string]any)["lengthCm"] = -1 },
+		"codAmount":               func(m map[string]any) { m["codAmount"] = 0 },
+		"paymentType":             func(m map[string]any) { m["paymentType"] = "BARTER" },
+		"merchantOrderId":         func(m map[string]any) { m["merchantOrderId"] = "" },
+		"customer.name":           func(m map[string]any) { m["customer"].(map[string]any)["name"] = " " },
 	}
 	i := 0
 	for field, mutate := range cases {

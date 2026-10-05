@@ -97,7 +97,7 @@ CREATE TABLE shipment_events (
     -- APPLIED: moved/confirmed state. REJECTED_TRANSITION: quarantined, excluded from history.
     disposition          TEXT NOT NULL DEFAULT 'APPLIED' CHECK (disposition IN ('APPLIED','REJECTED_TRANSITION')),
     raw_event_payload    JSONB NOT NULL,
-    received_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+    received_at          TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
 );
 CREATE INDEX shipment_events_shipment_idx ON shipment_events(shipment_id, event_time, received_at);
 
