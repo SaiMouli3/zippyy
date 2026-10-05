@@ -12,6 +12,10 @@ Guides: [`docs/CODEBASE_GUIDE.md`](docs/CODEBASE_GUIDE.md) (every file and flow 
 the acceptance checklist with the test that proves each item is in [`docs/acceptance-checklist.md`](docs/acceptance-checklist.md).
 
 ## 2. Architecture
+![Zippy end-to-end architecture](docs/architecture.svg)
+
+*Full-size diagram: [`docs/architecture.svg`](docs/architecture.svg) / [`docs/architecture.png`](docs/architecture.png). Text version:*
+
 ```
 React (Vite · TS · Tailwind)  ──►  FastAPI modular monolith  ──►  PostgreSQL (state, audit, quarantine)
    served by nginx :3000            │                              Redis (rate cache only; optional at runtime)

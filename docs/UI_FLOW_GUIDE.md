@@ -22,6 +22,11 @@ Line numbers (`file:line`) refer to the code at the time of writing; if they dri
 
 ## 1. How a click travels (the common path)
 
+![Zippy end-to-end architecture](architecture.svg)
+
+*(Also available as [`architecture.png`](architecture.png).)*
+
+
 ```
 React page (frontend/src/pages/X.tsx)
    │  calls  api(path, method, body)            frontend/src/api.ts:11   (fetch + JSON + error handling)

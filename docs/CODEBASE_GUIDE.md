@@ -37,6 +37,12 @@ buyer "the carrier accepted" **after** the carrier really accepted.
 
 ### Architecture
 
+![Zippy end-to-end architecture](architecture.svg)
+
+*(Also available as [`architecture.png`](architecture.png).)*
+
+Text version of the same picture:
+
 ```
  Browser
    │  http://localhost:3000
