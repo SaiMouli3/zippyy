@@ -2,6 +2,7 @@
 
 This document explains **every file, every flow and every piece of logic** in the project, in plain language.
 Read it top to bottom once; afterwards use the table of contents as a reference.
+For a screen-by-screen view ("I click this button → which file, which API, what appears") see [`UI_FLOW_GUIDE.md`](UI_FLOW_GUIDE.md).
 
 1. [What the system does (the big picture)](#1-what-the-system-does)
 2. [Glossary](#2-glossary)

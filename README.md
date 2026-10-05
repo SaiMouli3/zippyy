@@ -7,7 +7,8 @@ carrier and create a shipment, ingests carrier **webhooks** (idempotent, auditab
 **NDR (non-delivery report) agent** flow: simulated WhatsApp → mock intent extraction → deterministic rules → carrier
 reattempt → buyer confirmation (never before the carrier accepts).
 
-Design choices, strategies and limits are documented in [`docs/assumptions.md`](docs/assumptions.md);
+Guides: [`docs/CODEBASE_GUIDE.md`](docs/CODEBASE_GUIDE.md) (every file and flow explained) and
+[`docs/UI_FLOW_GUIDE.md`](docs/UI_FLOW_GUIDE.md) (every screen/button → API → function). Design choices, strategies and limits are documented in [`docs/assumptions.md`](docs/assumptions.md);
 the acceptance checklist with the test that proves each item is in [`docs/acceptance-checklist.md`](docs/acceptance-checklist.md).
 
 ## 2. Architecture
