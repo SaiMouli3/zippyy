@@ -1,0 +1,75 @@
+# One command:  docker compose up --build   (UI: http://localhost:3000, API docs: http://localhost:8080/api/docs)
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-zippy}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-zippy}
+      POSTGRES_DB: ${POSTGRES_DB:-zippy}
+    volumes: [pgdata:/var/lib/postgresql/data]
+    ports: ["5432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-zippy} -d ${POSTGRES_DB:-zippy}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  mock-carriers:
+    build: { context: ., dockerfile: apps/mock-carriers/Dockerfile }
+    environment:
+      PORT: "9000"
+      ZIPPY_WEBHOOK_BASE: http://backend:8080
+      FASTSHIP_WEBHOOK_SECRET: ${FASTSHIP_WEBHOOK_SECRET:-dev-fastship-secret}
+      QUICKEXPRESS_WEBHOOK_SECRET: ${QUICKEXPRESS_WEBHOOK_SECRET:-dev-quickexpress-secret}
+      RELIABLE_WEBHOOK_SECRET: ${RELIABLE_WEBHOOK_SECRET:-dev-reliable-secret}
+    ports: ["9000:9000"]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9000/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  backend:
+    build: { context: ., dockerfile: apps/api/Dockerfile }
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      mock-carriers: { condition: service_healthy }
+    environment:
+      PORT: "8080"
+      DATABASE_URL: postgres://${POSTGRES_USER:-zippy}:${POSTGRES_PASSWORD:-zippy}@postgres:5432/${POSTGRES_DB:-zippy}?sslmode=disable
+      REDIS_URL: redis://redis:6379/0
+      FASTSHIP_BASE_URL: http://mock-carriers:9000
+      QUICKEXPRESS_BASE_URL: http://mock-carriers:9000
+      RELIABLECOURIER_BASE_URL: http://mock-carriers:9000
+      ZIPPY_PUBLIC_URL: http://backend:8080
+      CACHE_TTL_SECONDS: ${CACHE_TTL_SECONDS:-300}
+      CARRIER_TIMEOUT_MS: ${CARRIER_TIMEOUT_MS:-3000}
+      NDR_CONTACT_TIMEOUT: ${NDR_CONTACT_TIMEOUT:-14400}
+      NDR_AUTO_CONTACT: ${NDR_AUTO_CONTACT:-false}
+      LLM_PROVIDER: ${LLM_PROVIDER:-mock}
+      WEBHOOK_SIGNATURE_REQUIRED: "true"
+      FASTSHIP_WEBHOOK_SECRET: ${FASTSHIP_WEBHOOK_SECRET:-dev-fastship-secret}
+      QUICKEXPRESS_WEBHOOK_SECRET: ${QUICKEXPRESS_WEBHOOK_SECRET:-dev-quickexpress-secret}
+      RELIABLE_WEBHOOK_SECRET: ${RELIABLE_WEBHOOK_SECRET:-dev-reliable-secret}
+      SEED_DEMO: ${SEED_DEMO:-true}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports: ["8080:8080"]
+
+  frontend:
+    build: { context: ., dockerfile: apps/web/Dockerfile }
+    depends_on:
+      backend: { condition: service_healthy }
+    ports: ["3000:80"]
+
+volumes:
+  pgdata:

@@ -1,3 +1,417 @@
 openapi: 3.0.3
-info: {title: placeholder, version: 0.0.0}
-paths: {}
+info:
+  title: Zippyy Logistics Aggregator & NDR Agent API
+  version: 1.0.0
+  description: |
+    Order → rate aggregation → carrier selection → shipment → webhooks/tracking → NDR agent.
+
+    **Conventions**
+    - Errors: `{"error": {"code", "message", "requestId", "details"}}`. Every response carries `X-Request-ID` (send your own to correlate).
+    - Roles (MVP identity): send `X-Zippy-Role: SELLER|OPS` (and optional `X-Zippy-Actor`) on seller/ops-only endpoints. Carrier webhooks are authenticated by HMAC instead.
+    - Money is rupees with two decimals; the server compares amounts to the paisa.
+servers:
+  - url: http://localhost:8080
+tags:
+  - name: Orders
+  - name: Rates
+  - name: Shipments
+  - name: Webhooks
+  - name: NDR
+  - name: Approvals
+  - name: Mock carriers
+  - name: Rules
+  - name: Observability
+components:
+  parameters:
+    OrderId: { name: orderId, in: path, required: true, schema: { type: string }, example: ZPY-ORD-10001, description: Human id (ZPY-ORD-…) or UUID }
+    CaseId: { name: caseId, in: path, required: true, schema: { type: string }, example: NDR-20001, description: Case UUID or case number }
+    Role:
+      name: X-Zippy-Role
+      in: header
+      required: false
+      schema: { type: string, enum: [SELLER, OPS] }
+  responses:
+    Error:
+      description: Error
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: { type: string, example: VALIDATION_FAILED }
+            message: { type: string }
+            requestId: { type: string }
+            details: { type: object, additionalProperties: true }
+    Address:
+      type: object
+      required: [addressLine1, city, state, pincode]
+      properties:
+        addressLine1: { type: string }
+        addressLine2: { type: string }
+        city: { type: string }
+        state: { type: string }
+        pincode: { type: string, pattern: '^[1-9][0-9]{5}$' }
+    CreateOrder:
+      type: object
+      required: [merchantOrderId, merchantId, customer, pickupAddress, deliveryAddress, package, paymentType]
+      properties:
+        merchantOrderId: { type: string }
+        merchantId: { type: string }
+        customer:
+          type: object
+          required: [name, phone]
+          properties:
+            name: { type: string }
+            phone: { type: string, pattern: '^[6-9][0-9]{9}$' }
+            email: { type: string, format: email }
+        pickupAddress: { $ref: '#/components/schemas/Address' }
+        deliveryAddress: { $ref: '#/components/schemas/Address' }
+        package:
+          type: object
+          required: [weightGrams, lengthCm, widthCm, heightCm]
+          properties:
+            weightGrams: { type: integer, minimum: 1 }
+            lengthCm: { type: number, minimum: 0.01 }
+            widthCm: { type: number, minimum: 0.01 }
+            heightCm: { type: number, minimum: 0.01 }
+        paymentType: { type: string, enum: [COD, PREPAID] }
+        codAmount: { type: number, description: Must be > 0 for COD, 0 for PREPAID }
+        language: { type: string, enum: [en, hi, te, ta, kn], description: Seller order language (NDR conversation default) }
+    Quote:
+      type: object
+      properties:
+        carrierCode: { type: string, enum: [FASTSHIP, QUICKEXPRESS, RELIABLE] }
+        carrierName: { type: string }
+        serviceCode: { type: string }
+        serviceName: { type: string }
+        baseCharge: { type: number }
+        codCharge: { type: number }
+        additionalCharges: { type: number }
+        tax: { type: number }
+        totalCharge: { type: number }
+        estimatedMinDays: { type: integer }
+        estimatedMaxDays: { type: integer }
+        quoteReference: { type: string, nullable: true }
+    Rates:
+      type: object
+      properties:
+        orderId: { type: string }
+        complete: { type: boolean }
+        cached: { type: boolean }
+        expired: { type: boolean }
+        expiresAt: { type: string, format: date-time }
+        shippingOptions: { type: array, items: { $ref: '#/components/schemas/Quote' } }
+        failedCarriers:
+          type: array
+          items:
+            type: object
+            properties:
+              carrierCode: { type: string }
+              reason: { type: string, enum: [TIMEOUT, HTTP_ERROR, MALFORMED_RESPONSE, UNAVAILABLE] }
+              message: { type: string }
+    SelectCarrier:
+      type: object
+      required: [carrierCode, serviceCode, quotedAmount]
+      properties:
+        carrierCode: { type: string }
+        serviceCode: { type: string }
+        quotedAmount: { type: number }
+        quoteReference: { type: string, nullable: true }
+    Approval:
+      type: object
+      properties:
+        id: { type: string }
+        kind: { type: string, example: ADDRESS_NEW_PINCODE }
+        status: { type: string, enum: [PENDING, APPROVED, REJECTED, EXPIRED] }
+        requiredRoles: { type: array, items: { type: string } }
+        grantedRoles: { type: array, items: { type: string } }
+        blocking: { type: boolean }
+        reason: { type: string }
+        buyerRequest: { type: string }
+        proposedAction: { type: array, items: { type: object } }
+        evidence: { type: object }
+paths:
+  /api/orders:
+    post:
+      tags: [Orders]
+      summary: Create an order
+      description: Duplicate `merchantOrderId` for the same merchant returns 409 `DUPLICATE_ORDER` (with the existing `orderId`). Send `Idempotency-Key` to replay safely.
+      parameters:
+        - { name: Idempotency-Key, in: header, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateOrder' }
+            example:
+              merchantOrderId: MERCHANT-10001
+              merchantId: MRC-100
+              customer: { name: Rahul Sharma, phone: '9876543210', email: rahul@example.com }
+              pickupAddress: { addressLine1: 15 MG Road, city: Bengaluru, state: Karnataka, pincode: '560001' }
+              deliveryAddress: { addressLine1: 22 Connaught Place, city: New Delhi, state: Delhi, pincode: '110001' }
+              package: { weightGrams: 1500, lengthCm: 20, widthCm: 15, heightCm: 10 }
+              paymentType: COD
+              codAmount: 2500
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              example: { orderId: ZPY-ORD-10001, merchantOrderId: MERCHANT-10001, status: ORDER_CREATED, createdAt: '2026-07-15T16:00:00Z' }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+    get:
+      tags: [Orders]
+      summary: List orders
+      responses: { '200': { description: OK } }
+  /api/orders/{orderId}:
+    get:
+      tags: [Orders]
+      summary: Get an order
+      parameters: [{ $ref: '#/components/parameters/OrderId' }]
+      responses: { '200': { description: OK }, '404': { $ref: '#/components/responses/Error' } }
+  /api/orders/{orderId}/rates:
+    post:
+      tags: [Rates]
+      summary: Aggregate carrier rates (cache-aware)
+      description: |
+        Calls all carriers concurrently, normalizes, sorts by total ascending, caches in Redis
+        (`zippy:rates:{merchantId}:{pickup}:{delivery}:{weight}:{l}:{w}:{h}:{payment}:{cod}`) and stores a per-order quote snapshot.
+        Partial results are returned with `failedCarriers` (and cached with a short TTL). All carriers failing returns 502.
+      parameters:
+        - { $ref: '#/components/parameters/OrderId' }
+        - { name: refresh, in: query, schema: { type: boolean }, description: Bypass the cache read (still refreshes it) }
+        - { name: sort, in: query, schema: { type: string, enum: [price, eta, carrier] } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Rates' } } } }
+        '409': { description: Shipment already exists }
+        '502': { description: ALL_CARRIERS_FAILED }
+    get:
+      tags: [Rates]
+      summary: Latest persisted quote set for the order (no carrier calls)
+      parameters:
+        - { $ref: '#/components/parameters/OrderId' }
+        - { name: sort, in: query, schema: { type: string, enum: [price, eta, carrier] } }
+      responses: { '200': { description: OK } }
+  /api/orders/{orderId}/select-carrier:
+    post:
+      tags: [Rates]
+      summary: Select a carrier/service
+      description: |
+        Validated against the stored latest quote set: quote must exist, be unexpired, and `quotedAmount` must equal the stored amount to the paisa.
+        Errors: `QUOTE_NOT_FOUND`, `QUOTE_REFERENCE_MISMATCH` (422), `QUOTE_EXPIRED`, `QUOTED_AMOUNT_MISMATCH`, `SHIPMENT_EXISTS` (409).
+      parameters: [{ $ref: '#/components/parameters/OrderId' }]
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SelectCarrier' }
+            example: { carrierCode: FASTSHIP, serviceCode: FAST-AIR, quotedAmount: 182.90, quoteReference: null }
+      responses: { '200': { description: OK }, '409': { $ref: '#/components/responses/Error' }, '422': { $ref: '#/components/responses/Error' } }
+  /api/orders/{orderId}/shipment:
+    post:
+      tags: [Shipments]
+      summary: Create the shipment with the selected carrier (idempotent)
+      parameters: [{ $ref: '#/components/parameters/OrderId' }]
+      responses:
+        '201': { description: Created }
+        '200': { description: Already existed }
+        '422': { description: CARRIER_NOT_SELECTED }
+        '502': { description: CARRIER_BOOKING_FAILED }
+  /api/orders/{orderId}/tracking:
+    get:
+      tags: [Shipments]
+      summary: Order, shipment, current status and full normalized history
+      parameters: [{ $ref: '#/components/parameters/OrderId' }]
+      responses: { '200': { description: OK } }
+  /api/shipments:
+    get: { tags: [Shipments], summary: List shipments, responses: { '200': { description: OK } } }
+  /api/webhooks/{carrier}:
+    post:
+      tags: [Webhooks]
+      summary: Carrier status webhook (fastship | quickexpress | reliable)
+      description: |
+        Authenticated by `X-Carrier-Signature` = hex(HMAC-SHA256(raw body, carrier secret)). Normalized, idempotent (duplicate → 200 `duplicate`),
+        regressions → 409 `INVALID_STATUS_TRANSITION` (event stored, quarantined), unknown tracking → 404, malformed → 400.
+      parameters:
+        - { name: carrier, in: path, required: true, schema: { type: string, enum: [fastship, quickexpress, reliable] } }
+        - { name: X-Carrier-Signature, in: header, schema: { type: string } }
+      requestBody:
+        content:
+          application/json:
+            examples:
+              fastship: { value: { shipment_id: FS-700001, tracking_number: FST123456789, event_code: IN_TRANSIT, event_description: Shipment departed Bengaluru hub, event_time: '2026-07-16T10:30:00Z', location: Bengaluru Hub } }
+              quickexpress: { value: { awb: QE987654321, event: { type: OFD, message: Shipment is out for delivery, occurredAt: '2026-07-17T08:15:00Z' }, facility: { city: New Delhi, code: DEL-01 } } }
+              reliable: { value: { trackingCode: RC1122334455, statusId: 50, statusText: Delivered, updatedOn: '2026-07-19T15:45:00Z' } }
+      responses:
+        '200': { description: 'processed | duplicate' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/webhooks-inbox:
+    get: { tags: [Webhooks], summary: Recent webhook deliveries incl. rejected ones, responses: { '200': { description: OK } } }
+  /api/ndr/cases:
+    get:
+      tags: [NDR]
+      summary: List NDR cases
+      parameters:
+        - { name: state, in: query, schema: { type: string } }
+        - { name: reason, in: query, schema: { type: string } }
+        - { name: carrier, in: query, schema: { type: string } }
+        - { name: orderId, in: query, schema: { type: string } }
+        - { name: open, in: query, schema: { type: boolean } }
+      responses: { '200': { description: OK } }
+  /api/ndr/cases/{caseId}:
+    get:
+      tags: [NDR]
+      summary: Case with messages, timeline, communication attempts, carrier actions, approvals and live rules
+      parameters: [{ $ref: '#/components/parameters/CaseId' }]
+      responses: { '200': { description: OK }, '404': { $ref: '#/components/responses/Error' } }
+  /api/ndr/cases/{caseId}/contact:
+    post:
+      tags: [NDR]
+      summary: Contact the buyer (WhatsApp → IVR → SMS, in the case language)
+      parameters: [{ $ref: '#/components/parameters/CaseId' }]
+      requestBody:
+        content: { application/json: { example: { simulateFailures: [WHATSAPP] } } }
+      responses: { '200': { description: OK } }
+  /api/ndr/cases/{caseId}/buyer-reply:
+    post:
+      tags: [NDR]
+      summary: Simulate (or ingest) a buyer reply and run the pipeline
+      description: Stores the original text verbatim, applies language switching, extracts intent (AI), then runs the deterministic rules engine and acts.
+      parameters: [{ $ref: '#/components/parameters/CaseId' }]
+      requestBody:
+        content: { application/json: { example: { text: 'Tomorrow evening after 6. Please tell security guard.', channel: WHATSAPP, autoProcess: true } } }
+      responses: { '200': { description: OK } }
+  /api/ndr/cases/{caseId}/process:
+    post:
+      tags: [NDR]
+      summary: Advance the case for a trigger
+      parameters: [{ $ref: '#/components/parameters/CaseId' }]
+      requestBody:
+        content: { application/json: { example: { trigger: BUYER_TIMEOUT } } }
+      description: 'Triggers: REEVALUATE, BUYER_TIMEOUT (next channel, then default rule), SELLER_TIMEOUT (apply default), RETRY_ACTION.'
+      responses: { '200': { description: OK } }
+  /api/ndr/cases/{caseId}/actions:
+    post:
+      tags: [NDR]
+      summary: Seller/ops-submitted carrier action (same rules engine; cannot bypass carrier capabilities)
+      parameters:
+        - { $ref: '#/components/parameters/CaseId' }
+        - { $ref: '#/components/parameters/Role' }
+      requestBody:
+        content: { application/json: { example: { type: UPDATE_PHONE, phone: '9123456780' } } }
+      responses: { '200': { description: OK }, '403': { $ref: '#/components/responses/Error' }, '422': { description: ACTION_NOT_PERMITTED } }
+  /api/ndr/cases/{caseId}/approve:
+    post:
+      tags: [NDR]
+      summary: Approve every pending approval on the case that the caller's role may decide
+      parameters: [{ $ref: '#/components/parameters/CaseId' }, { $ref: '#/components/parameters/Role' }]
+      responses: { '200': { description: OK }, '403': { $ref: '#/components/responses/Error' } }
+  /api/ndr/cases/{caseId}/reject:
+    post:
+      tags: [NDR]
+      summary: Reject pending approvals on the case
+      parameters: [{ $ref: '#/components/parameters/CaseId' }, { $ref: '#/components/parameters/Role' }]
+      responses: { '200': { description: OK } }
+  /api/ndr/cases/{caseId}/timeline:
+    get:
+      tags: [NDR]
+      summary: Case timeline events
+      parameters: [{ $ref: '#/components/parameters/CaseId' }]
+      responses: { '200': { description: OK } }
+  /api/approvals:
+    get:
+      tags: [Approvals]
+      summary: List approvals
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [PENDING, APPROVED, REJECTED, EXPIRED] } }
+        - { name: caseId, in: query, schema: { type: string } }
+      responses: { '200': { description: OK } }
+  /api/approvals/{approvalId}/approve:
+    post:
+      tags: [Approvals]
+      summary: Approve (role must be in requiredRoles; SELLER+OPS needs both)
+      parameters:
+        - { name: approvalId, in: path, required: true, schema: { type: string } }
+        - { $ref: '#/components/parameters/Role' }
+      requestBody: { content: { application/json: { example: { note: ok } } } }
+      responses: { '200': { description: OK }, '403': { $ref: '#/components/responses/Error' }, '409': { $ref: '#/components/responses/Error' } }
+  /api/approvals/{approvalId}/reject:
+    post:
+      tags: [Approvals]
+      summary: Reject
+      parameters:
+        - { name: approvalId, in: path, required: true, schema: { type: string } }
+        - { $ref: '#/components/parameters/Role' }
+      responses: { '200': { description: OK } }
+  /api/mock-carriers/{carrier}/shipments/{shipmentId}/trigger:
+    post:
+      tags: [Mock carriers]
+      summary: Make the mock carrier emit a real webhook to Zippy
+      parameters:
+        - { name: carrier, in: path, required: true, schema: { type: string, enum: [FASTSHIP, QUICKEXPRESS, RELIABLE] } }
+        - { name: shipmentId, in: path, required: true, schema: { type: string }, description: Shipment UUID, tracking number or order id }
+      requestBody:
+        content:
+          application/json:
+            example: { event: NDR, ndrReason: CUST_UNAVAILABLE, remark: '', duplicates: 0 }
+            schema:
+              type: object
+              properties:
+                event: { type: string, enum: [PICKED_UP, IN_TRANSIT, OUT_FOR_DELIVERY, DELIVERED, NDR, RTO] }
+                ndrReason: { type: string, enum: [CUST_UNAVAILABLE, CUST_REFUSED, ADDRESS_ISSUE, PHONE_UNREACHABLE, COD_NOT_READY, FUTURE_DELIVERY, ACCESS_RESTRICTED, OUT_OF_AREA, SUSPECT_FALSE_ATTEMPT, OTHER] }
+                remark: { type: string }
+                duplicates: { type: integer, maximum: 9, description: Re-deliver the identical webhook N extra times }
+      responses: { '200': { description: Carrier-native payload and Zippy's response for each delivery } }
+  /api/mock-carriers/{carrier}/faults:
+    post:
+      tags: [Mock carriers]
+      summary: Inject carrier faults (http500, timeout, malformed, unavailable) or make carriers reject actions
+      parameters: [{ name: carrier, in: path, required: true, schema: { type: string } }]
+      requestBody: { content: { application/json: { example: { fault: http500, rejectActions: false } } } }
+      responses: { '200': { description: OK } }
+  /api/mock-carriers/{carrier}/stats:
+    get:
+      tags: [Mock carriers]
+      summary: Carrier-side call counters (proves cache hits avoid carrier calls)
+      parameters: [{ name: carrier, in: path, required: true, schema: { type: string } }]
+      responses: { '200': { description: OK } }
+  /api/rules/seller:
+    get: { tags: [Rules], summary: Seller rules, responses: { '200': { description: OK } } }
+  /api/rules/seller/{merchantId}:
+    put:
+      tags: [Rules]
+      summary: Update seller rules (SELLER role; audited)
+      parameters: [{ name: merchantId, in: path, required: true, schema: { type: string } }, { $ref: '#/components/parameters/Role' }]
+      responses: { '200': { description: OK }, '403': { $ref: '#/components/responses/Error' }, '422': { $ref: '#/components/responses/Error' } }
+  /api/rules/carriers:
+    get: { tags: [Rules], summary: Carrier constraints, responses: { '200': { description: OK } } }
+  /api/rules/carriers/{code}:
+    put:
+      tags: [Rules]
+      summary: Update carrier constraints (OPS role; audited)
+      parameters: [{ name: code, in: path, required: true, schema: { type: string } }, { $ref: '#/components/parameters/Role' }]
+      responses: { '200': { description: OK }, '403': { $ref: '#/components/responses/Error' } }
+  /api/audit-logs:
+    get:
+      tags: [Observability]
+      summary: Audit trail
+      parameters:
+        - { name: orderId, in: query, schema: { type: string } }
+        - { name: caseId, in: query, schema: { type: string } }
+        - { name: actorType, in: query, schema: { type: string, enum: [AGENT, SELLER, OPS, CARRIER, SYSTEM, BUYER] } }
+        - { name: limit, in: query, schema: { type: integer } }
+      responses: { '200': { description: OK } }
+  /api/dashboard:
+    get: { tags: [Observability], summary: Dashboard aggregates, responses: { '200': { description: OK } } }
+  /api/metrics:
+    get: { tags: [Observability], summary: In-process counters and latencies (cache hit/miss, carrier calls, webhooks, NDR), responses: { '200': { description: OK } } }
+  /health:
+    get: { tags: [Observability], summary: Liveness, responses: { '200': { description: OK } } }
+  /ready:
+    get: { tags: [Observability], summary: Readiness (checks PostgreSQL), responses: { '200': { description: OK }, '503': { description: Not ready } } }

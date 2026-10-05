@@ -125,7 +125,7 @@ func (r *Repo) ListCases(ctx context.Context, f CaseFilter) ([]NDRCase, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []NDRCase
+	out := []NDRCase{}
 	for rows.Next() {
 		c, err := scanCase(rows)
 		if err != nil {
@@ -177,7 +177,7 @@ func (r *Repo) ListNDREvents(ctx context.Context, caseID string) ([]NDREvent, er
 		return nil, err
 	}
 	defer rows.Close()
-	var out []NDREvent
+	out := []NDREvent{}
 	for rows.Next() {
 		var e NDREvent
 		if err := rows.Scan(&e.ID, &e.CaseID, &e.EventType, &e.Actor, &e.ActorType, &e.Description, &e.Data, &e.CreatedAt); err != nil {
@@ -220,7 +220,7 @@ func (r *Repo) ListMessages(ctx context.Context, caseID string) ([]Message, erro
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Message
+	out := []Message{}
 	for rows.Next() {
 		var m Message
 		if err := rows.Scan(&m.ID, &m.CaseID, &m.Direction, &m.SenderType, &m.Channel, &m.Language, &m.OriginalText, &m.InternalText, &m.Interpretation, &m.DeliveryStatus, &m.Processed, &m.CreatedAt); err != nil {
@@ -259,7 +259,7 @@ func (r *Repo) ListCommAttempts(ctx context.Context, caseID string) ([]CommAttem
 		return nil, err
 	}
 	defer rows.Close()
-	var out []CommAttempt
+	out := []CommAttempt{}
 	for rows.Next() {
 		var a CommAttempt
 		if err := rows.Scan(&a.ID, &a.CaseID, &a.Channel, &a.Status, &a.Error, &a.ProviderRef, &a.CreatedAt); err != nil {
@@ -321,7 +321,7 @@ func (r *Repo) ListActions(ctx context.Context, caseID string) ([]CarrierAction,
 		return nil, err
 	}
 	defer rows.Close()
-	var out []CarrierAction
+	out := []CarrierAction{}
 	for rows.Next() {
 		a, err := scanAction(rows)
 		if err != nil {
@@ -405,7 +405,7 @@ func (r *Repo) ListApprovals(ctx context.Context, status, caseID string, limit i
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Approval
+	out := []Approval{}
 	for rows.Next() {
 		a, err := scanApproval(rows)
 		if err != nil {

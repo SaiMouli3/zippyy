@@ -58,7 +58,7 @@ func (r *Repo) ListShipments(ctx context.Context, limit int) ([]Shipment, error)
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Shipment
+	out := []Shipment{}
 	for rows.Next() {
 		s, err := scanShipment(rows)
 		if err != nil {
@@ -145,7 +145,7 @@ func (r *Repo) ListShipmentEvents(ctx context.Context, shipmentID string, includ
 		return nil, err
 	}
 	defer rows.Close()
-	var out []ShipmentEvent
+	out := []ShipmentEvent{}
 	for rows.Next() {
 		var e ShipmentEvent
 		var st string
@@ -193,7 +193,7 @@ func (r *Repo) ListWebhookInbox(ctx context.Context, limit int) ([]InboxEntry, e
 		return nil, err
 	}
 	defer rows.Close()
-	var out []InboxEntry
+	out := []InboxEntry{}
 	for rows.Next() {
 		var e InboxEntry
 		if err := rows.Scan(&e.ID, &e.Carrier, &e.Outcome, &e.Detail, &e.RawBody, &e.ReceivedAt); err != nil {

@@ -267,3 +267,5 @@ func (s *Server) deliver(carrier, url string, body []byte) delivery {
 	}
 	return d
 }
+
+func timeNow() time.Time { return time.Now().UTC() }

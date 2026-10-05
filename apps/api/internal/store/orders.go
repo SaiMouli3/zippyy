@@ -69,7 +69,7 @@ func (r *Repo) ListOrders(ctx context.Context, limit int) ([]domain.Order, error
 		return nil, err
 	}
 	defer rows.Close()
-	var out []domain.Order
+	out := []domain.Order{}
 	for rows.Next() {
 		o, err := scanOrder(rows)
 		if err != nil {
@@ -153,7 +153,7 @@ func (r *Repo) LatestQuotes(ctx context.Context, orderID string) ([]StoredQuote,
 		return nil, err
 	}
 	defer rows.Close()
-	var out []StoredQuote
+	out := []StoredQuote{}
 	for rows.Next() {
 		q, err := scanQuote(rows)
 		if err != nil {

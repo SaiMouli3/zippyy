@@ -42,7 +42,7 @@ func (r *Repo) ListSellerRules(ctx context.Context) ([]domain.SellerRules, error
 		ids = append(ids, id)
 	}
 	rows.Close()
-	var out []domain.SellerRules
+	out := []domain.SellerRules{}
 	for _, id := range ids {
 		s, err := r.GetSellerRules(ctx, id)
 		if err != nil {
@@ -77,7 +77,7 @@ func (r *Repo) ListCarrierRules(ctx context.Context) ([]domain.CarrierRules, err
 		return nil, err
 	}
 	defer rows.Close()
-	var out []domain.CarrierRules
+	out := []domain.CarrierRules{}
 	for rows.Next() {
 		var c domain.CarrierRules
 		if err := rows.Scan(&c.CarrierCode, &c.MaxAttempts, &c.InstructionCutoff, &c.HoldWindowDays, &c.SupportedActions, &c.SupportsTimeSlot, &c.CanChangePaymentMode, &c.CanChangeAddress, &c.CanChangePhone, &c.UpdatedAt); err != nil {
@@ -197,7 +197,7 @@ func (r *Repo) ListAudit(ctx context.Context, f AuditFilter) ([]AuditRecord, err
 		return nil, err
 	}
 	defer rows.Close()
-	var out []AuditRecord
+	out := []AuditRecord{}
 	for rows.Next() {
 		var a AuditRecord
 		if err := rows.Scan(&a.ID, &a.Actor, &a.ActorType, &a.Action, &a.OrderID, &a.ShipmentID, &a.NDRCaseID, &a.CaseNumber, &a.PreviousState, &a.NewState, &a.Evidence, &a.RequestPayload, &a.ResponsePayload, &a.RequestID, &a.CreatedAt); err != nil {
