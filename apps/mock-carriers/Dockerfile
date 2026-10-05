@@ -7,7 +7,7 @@ COPY . .
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/mock-carriers ./apps/mock-carriers/cmd
 
 FROM alpine:3.20
-RUN adduser -D -u 10001 mock && apk add --no-cache ca-certificates wget
+RUN adduser -D -u 10001 mock   # busybox wget is built in (used by HEALTHCHECK)
 USER mock
 COPY --from=build /out/mock-carriers /usr/local/bin/mock-carriers
 EXPOSE 9000

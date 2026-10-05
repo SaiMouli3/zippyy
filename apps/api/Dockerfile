@@ -7,7 +7,7 @@ COPY . .
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/api ./apps/api/cmd/server
 
 FROM alpine:3.20
-RUN adduser -D -u 10001 zippy && apk add --no-cache ca-certificates wget
+RUN adduser -D -u 10001 zippy   # busybox wget is built in (used by HEALTHCHECK); no outbound HTTPS needed
 USER zippy
 COPY --from=build /out/api /usr/local/bin/api
 EXPOSE 8080
