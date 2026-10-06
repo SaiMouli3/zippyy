@@ -1,0 +1,1229 @@
+{
+  "info": {
+    "name": "Zippyy API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "role",
+      "value": "SELLER"
+    }
+  ],
+  "item": [
+    {
+      "name": "Orders",
+      "item": [
+        {
+          "name": "POST /api/orders \u2014 Create an order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Zippy-Role",
+                "value": "{{role}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "orders"
+              ],
+              "variable": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"merchantOrderId\": \"MERCHANT-10001\",\n  \"merchantId\": \"MRC-100\",\n  \"customer\": {\n    \"name\": \"Rahul Sharma\",\n    \"phone\": \"9876543210\",\n    \"email\": \"rahul@example.com\"\n  },\n  \"pickupAddress\": {\n    \"addressLine1\": \"15 MG Road\",\n    \"city\": \"Bengaluru\",\n    \"state\": \"Karnataka\",\n    \"pincode\": \"560001\"\n  },\n  \"deliveryAddress\": {\n    \"addressLine1\": \"22 Connaught Place\",\n    \"city\": \"New Delhi\",\n    \"state\": \"Delhi\",\n    \"pincode\": \"110001\"\n  },\n  \"package\": {\n    \"weightGrams\": 1500,\n    \"lengthCm\": 20,\n    \"widthCm\": 15,\n    \"heightCm\": 10\n  },\n  \"paymentType\": \"COD\",\n  \"codAmount\": 2500\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GET /api/orders \u2014 List orders",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Zippy-Role",
+                "value": "{{role}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "orders"
+              ],
+              "variable": []
+            }
+          }
+        },
+        {
+          "name": "GET /api/orders/{orderId} \u2014 Get an order",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Zippy-Role",
+                "value": "{{role}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/orders/:orderId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "orders",
+                ":orderId"
+              ],
+              "variable": []
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Rates",
+      "item": [
+        {
+          "name": "POST /api/orders/{orderId}/rates \u2014 Aggregate carrier rates (cache-aware)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Zippy-Role",
+                "value": "{{role}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/orders/:orderId/rates",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "orders",
+                ":orderId",
+                "rates"
+              ],
+              "variable": []
+            }
+          }
+        },
+        {
+          "name": "GET /api/orders/{orderId}/rates \u2014 Latest persisted quote set for the order (no carrier calls)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Zippy-Role",
+                "value": "{{role}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/orders/:orderId/rates",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "orders",
+                ":orderId",
+                "rates"
+              ],
+              "variable": []
+            }
+          }
+        },
+        {
+          "name": "POST /api/orders/{orderId}/select-carrier \u2014 Select a carrier/service",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Zippy-Role",
+                "value": "{{role}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/orders/:orderId/select-carrier",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "orders",
+                ":orderId",
+                "select-carrier"
+              ],
+              "variable": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"carrierCode\": \"FASTSHIP\",\n  \"serviceCode\": \"FAST-AIR\",\n  \"quotedAmount\": 182.9,\n  \"quoteReference\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Shipments",
+      "item": [
+        {
+          "name": "POST /api/orders/{orderId}/shipment \u2014 Create the shipment with the selected carrier (idempotent)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Zippy-Role",
+                "value": "{{role}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/orders/:orderId/shipment",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "orders",
+                ":orderId",
+                "shipment"
+              ],
+              "variable": []
+            }
+          }
+        },
+        {
+          "name": "GET /api/orders/{orderId}/tracking \u2014 Order, shipment, current status and full normalized history",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Zippy-Role",
+                "value": "{{role}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/orders/:orderId/tracking",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "orders",
+                ":orderId",
+                "tracking"
+              ],
+              "variable": []
+            }
+          }
+        },
+        {
+          "name": "GET /api/shipments \u2014 List shipments",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Zippy-Role",
+                "value": "{{role}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/shipments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shipments"
+              ],
+              "variable": []
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Webhooks",
+      "item": [
+        {
+          "name": "POST /api/webhooks/{carrier} \u2014 Carrier status webhook (fastship | quickexpress | reliable)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Zippy-Role",
+                "value": "{{role}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/webhooks/:carrier",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "webhooks",
+                ":carrier"
+              ],
+              "variable": [
+                {
+                  "key": "carrier",
+                  "value": ""
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"shipment_id\": \"FS-700001\",\n  \"tracking_number\": \"FST123456789\",\n  \"event_code\": \"IN_TRANSIT\",\n  \"event_description\": \"Shipment departed Bengaluru hub\",\n  \"event_time\": \"2026-07-16T10:30:00Z\",\n  \"location\": \"Bengaluru Hub\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GET /api/webhooks-inbox \u2014 Recent webhook deliveries incl. rejected ones",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Zippy-Role",
+                "value": "{{role}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/webhooks-inbox",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "webhooks-inbox"
+              ],
+              "variable": []
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "NDR",
+      "item": [
+        {
+          "name": "GET /api/ndr/cases \u2014 List NDR cases",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Zippy-Role",
+                "value": "{{role}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/ndr/cases",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "ndr",
+                "cases"
+              ],
+              "variable": []
+            }
+          }
+        },
+        {
+          "name": "GET /api/ndr/cases/{caseId} \u2014 Case with messages, timeline, communication attempts, carrier actions, approvals and live rules",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Zippy-Role",
+                "value": "{{role}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/ndr/cases/:caseId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "ndr",
+                "cases",
+                ":caseId"
+              ],
+              "variable": []
+            }
+          }
+        },
+        {
+          "name": "POST /api/ndr/cases/{caseId}/contact \u2014 Contact the buyer (WhatsApp \u2192 IVR \u2192 SMS, in the case language)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Zippy-Role",
+                "value": "{{role}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/ndr/cases/:caseId/contact",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "ndr",
+                "cases",
+                ":caseId",
+                "contact"
+              ],
+              "variable": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"simulateFailures\": [\n    \"WHATSAPP\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /api/ndr/cases/{caseId}/buyer-reply \u2014 Simulate (or ingest) a buyer reply and run the pipeline",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Zippy-Role",
+                "value": "{{role}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/ndr/cases/:caseId/buyer-reply",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "ndr",
+                "cases",
+                ":caseId",
+                "buyer-reply"
+              ],
+              "variable": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"Tomorrow evening after 6. Please tell security guard.\",\n  \"channel\": \"WHATSAPP\",\n  \"autoProcess\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /api/ndr/cases/{caseId}/process \u2014 Advance the case for a trigger",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Zippy-Role",
+                "value": "{{role}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/ndr/cases/:caseId/process",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "ndr",
+                "cases",
+                ":caseId",
+                "process"
+              ],
+              "variable": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"trigger\": \"BUYER_TIMEOUT\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /api/ndr/cases/{caseId}/actions \u2014 Seller/ops-submitted carrier action (same rules engine; cannot bypass carrier capabilities)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Zippy-Role",
+                "value": "{{role}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/ndr/cases/:caseId/actions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "ndr",
+                "cases",
+                ":caseId",
+                "actions"
+              ],
+              "variable": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"UPDATE_PHONE\",\n  \"phone\": \"9123456780\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /api/ndr/cases/{caseId}/approve \u2014 Approve every pending approval on the case that the caller's role may decide",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Zippy-Role",
+                "value": "{{role}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/ndr/cases/:caseId/approve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "ndr",
+                "cases",
+                ":caseId",
+                "approve"
+              ],
+              "variable": []
+            }
+          }
+        },
+        {
+          "name": "POST /api/ndr/cases/{caseId}/reject \u2014 Reject pending approvals on the case",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Zippy-Role",
+                "value": "{{role}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/ndr/cases/:caseId/reject",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "ndr",
+                "cases",
+                ":caseId",
+                "reject"
+              ],
+              "variable": []
+            }
+          }
+        },
+        {
+          "name": "GET /api/ndr/cases/{caseId}/timeline \u2014 Case timeline events",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Zippy-Role",
+                "value": "{{role}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/ndr/cases/:caseId/timeline",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "ndr",
+                "cases",
+                ":caseId",
+                "timeline"
+              ],
+              "variable": []
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Approvals",
+      "item": [
+        {
+          "name": "GET /api/approvals \u2014 List approvals",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Zippy-Role",
+                "value": "{{role}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/approvals",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "approvals"
+              ],
+              "variable": []
+            }
+          }
+        },
+        {
+          "name": "POST /api/approvals/{approvalId}/approve \u2014 Approve (role must be in requiredRoles; SELLER+OPS needs both)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Zippy-Role",
+                "value": "{{role}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/approvals/:approvalId/approve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "approvals",
+                ":approvalId",
+                "approve"
+              ],
+              "variable": [
+                {
+                  "key": "approvalId",
+                  "value": ""
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"note\": \"ok\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /api/approvals/{approvalId}/reject \u2014 Reject",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Zippy-Role",
+                "value": "{{role}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/approvals/:approvalId/reject",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "approvals",
+                ":approvalId",
+                "reject"
+              ],
+              "variable": [
+                {
+                  "key": "approvalId",
+                  "value": ""
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Mock carriers",
+      "item": [
+        {
+          "name": "POST /api/mock-carriers/{carrier}/shipments/{shipmentId}/trigger \u2014 Make the mock carrier emit a real webhook to Zippy",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Zippy-Role",
+                "value": "{{role}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/mock-carriers/:carrier/shipments/:shipmentId/trigger",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "mock-carriers",
+                ":carrier",
+                "shipments",
+                ":shipmentId",
+                "trigger"
+              ],
+              "variable": [
+                {
+                  "key": "carrier",
+                  "value": ""
+                },
+                {
+                  "key": "shipmentId",
+                  "value": ""
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event\": \"NDR\",\n  \"ndrReason\": \"CUST_UNAVAILABLE\",\n  \"remark\": \"\",\n  \"duplicates\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /api/mock-carriers/{carrier}/faults \u2014 Inject carrier faults (http500, timeout, malformed, unavailable) or make carriers reject actions",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Zippy-Role",
+                "value": "{{role}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/mock-carriers/:carrier/faults",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "mock-carriers",
+                ":carrier",
+                "faults"
+              ],
+              "variable": [
+                {
+                  "key": "carrier",
+                  "value": ""
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fault\": \"http500\",\n  \"rejectActions\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GET /api/mock-carriers/{carrier}/stats \u2014 Carrier-side call counters (proves cache hits avoid carrier calls)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Zippy-Role",
+                "value": "{{role}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/mock-carriers/:carrier/stats",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "mock-carriers",
+                ":carrier",
+                "stats"
+              ],
+              "variable": [
+                {
+                  "key": "carrier",
+                  "value": ""
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Rules",
+      "item": [
+        {
+          "name": "GET /api/rules/seller \u2014 Seller rules",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Zippy-Role",
+                "value": "{{role}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/rules/seller",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "rules",
+                "seller"
+              ],
+              "variable": []
+            }
+          }
+        },
+        {
+          "name": "PUT /api/rules/seller/{merchantId} \u2014 Update seller rules (SELLER role; audited)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Zippy-Role",
+                "value": "{{role}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/rules/seller/:merchantId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "rules",
+                "seller",
+                ":merchantId"
+              ],
+              "variable": [
+                {
+                  "key": "merchantId",
+                  "value": ""
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /api/rules/carriers \u2014 Carrier constraints",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Zippy-Role",
+                "value": "{{role}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/rules/carriers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "rules",
+                "carriers"
+              ],
+              "variable": []
+            }
+          }
+        },
+        {
+          "name": "PUT /api/rules/carriers/{code} \u2014 Update carrier constraints (OPS role; audited)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Zippy-Role",
+                "value": "{{role}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/rules/carriers/:code",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "rules",
+                "carriers",
+                ":code"
+              ],
+              "variable": [
+                {
+                  "key": "code",
+                  "value": ""
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Observability",
+      "item": [
+        {
+          "name": "GET /api/audit-logs \u2014 Audit trail",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Zippy-Role",
+                "value": "{{role}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/audit-logs",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "audit-logs"
+              ],
+              "variable": []
+            }
+          }
+        },
+        {
+          "name": "GET /api/dashboard \u2014 Dashboard aggregates",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Zippy-Role",
+                "value": "{{role}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/dashboard",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "dashboard"
+              ],
+              "variable": []
+            }
+          }
+        },
+        {
+          "name": "GET /api/metrics \u2014 In-process counters and latencies (cache hit/miss",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Zippy-Role",
+                "value": "{{role}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/metrics",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "metrics"
+              ],
+              "variable": []
+            }
+          }
+        },
+        {
+          "name": "GET /health \u2014 Liveness",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Zippy-Role",
+                "value": "{{role}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ],
+              "variable": []
+            }
+          }
+        },
+        {
+          "name": "GET /ready \u2014 Readiness (checks PostgreSQL)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Zippy-Role",
+                "value": "{{role}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/ready",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "ready"
+              ],
+              "variable": []
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
