@@ -104,9 +104,17 @@ var templates = map[string]map[string]string{
 		`டெலிவரிக்குப் பயன்படுத்த சரியான 10 இலக்க மொபைல் எண்ணை அனுப்புங்கள்.`,
 		`ಡೆಲಿವರಿಗೆ ಬಳಸಬಹುದಾದ ಮಾನ್ಯ 10 ಅಂಕಿಯ ಮೊಬೈಲ್ ಸಂಖ್ಯೆ ಕಳುಹಿಸಿ.`),
 	"clarify.prepaid_unavailable": t(
-		`Online payment isn't available for this order. Please tell us a day when the cash will be ready.`, "", "", "", ""),
+		`Online payment isn't available for this order. Please tell us a day when the cash will be ready.`,
+		`इस ऑर्डर के लिए ऑनलाइन भुगतान उपलब्ध नहीं है। कृपया बताएं नकद कब तैयार होगा।`,
+		`ఈ ఆర్డర్‌కు ఆన్‌లైన్ చెల్లింపు అందుబాటులో లేదు. నగదు ఎప్పుడు సిద్ధమో చెప్పండి.`,
+		`இந்த ஆர்டருக்கு ஆன்லைன் பணம் செலுத்துதல் இல்லை. பணம் எப்போது தயாராகும் என்று கூறுங்கள்.`,
+		`ಈ ಆರ್ಡರ್‌ಗೆ ಆನ್‌ಲೈನ್ ಪಾವತಿ ಲಭ್ಯವಿಲ್ಲ. ನಗದು ಯಾವಾಗ ಸಿದ್ಧ ಎಂದು ತಿಳಿಸಿ.`),
 	"clarify.rto_unavailable": t(
-		`We can't cancel the order at this stage. Would you like another delivery attempt? Please tell us a convenient day.`, "", "", "", ""),
+		`We can't cancel the order at this stage. Would you like another delivery attempt? Please tell us a convenient day.`,
+		`हम इस चरण में ऑर्डर रद्द नहीं कर सकते। क्या आप एक और डिलीवरी प्रयास चाहेंगे? कृपया सुविधाजनक दिन बताएं।`,
+		`ఈ దశలో ఆర్డర్‌ను రద్దు చేయలేము. మరో డెలివరీ ప్రయత్నం కావాలా? అనుకూలమైన రోజు చెప్పండి.`,
+		`இந்த கட்டத்தில் ஆர்டரை ரத்து செய்ய முடியாது. மற்றொரு டெலிவரி முயற்சி வேண்டுமா? வசதியான நாளைக் கூறுங்கள்.`,
+		`ಈ ಹಂತದಲ್ಲಿ ಆರ್ಡರ್ ರದ್ದುಮಾಡಲಾಗದು. ಇನ್ನೊಂದು ಡೆಲಿವರಿ ಪ್ರಯತ್ನ ಬೇಕೇ? ಅನುಕೂಲಕರ ದಿನ ತಿಳಿಸಿ.`),
 	"ask.reason": t(
 		`Could you tell us why you don't want to accept the order? You can also ask us to cancel it, or deliver on another day.`,
 		`क्या आप बता सकते हैं कि आप ऑर्डर क्यों नहीं लेना चाहते? आप इसे रद्द करने या किसी और दिन डिलीवरी के लिए भी कह सकते हैं।`,
@@ -191,7 +199,11 @@ var templates = map[string]map[string]string{
 		`మా సపోర్ట్ బృందం మీ కేసును పరిశీలిస్తోంది, మిమ్మల్ని సంప్రదిస్తుంది.`,
 		`எங்கள் ஆதரவுக் குழு உங்கள் வழக்கைப் பார்க்கிறது, உங்களைத் தொடர்பு கொள்ளும்.`,
 		`ನಮ್ಮ ಬೆಂಬಲ ತಂಡ ನಿಮ್ಮ ಪ್ರಕರಣವನ್ನು ಪರಿಶೀಲಿಸುತ್ತಿದೆ, ನಿಮ್ಮನ್ನು ಸಂಪರ್ಕಿಸುತ್ತದೆ.`),
-	"ack.thanks": t(`You're welcome! We'll keep an eye on your delivery.`, "", "", "", ""),
+	"ack.thanks": t(`You're welcome! We'll keep an eye on your delivery.`,
+		`आपका स्वागत है! हम आपकी डिलीवरी पर नज़र रखेंगे।`,
+		`ధన్యవాదాలు! మేము మీ డెలివరీని గమనిస్తూ ఉంటాము.`,
+		`நன்றி! உங்கள் டெலிவரியைக் கண்காணிப்போம்.`,
+		`ಧನ್ಯವಾದಗಳು! ನಿಮ್ಮ ಡೆಲಿವರಿಯನ್ನು ಗಮನಿಸುತ್ತೇವೆ.`),
 }
 
 // Render returns the localized message (with the standard intro). Unlocalized entries fall back to English;

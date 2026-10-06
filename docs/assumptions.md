@@ -16,7 +16,7 @@
 10. **Cancellation** – a clear "cancel" is acted on (approval per seller policy); a vague refusal first asks the reason.
 11. **Order language** – optional `language` on order creation represents the "seller order language".
 12. **Seeded demo data** – `MERCHANT-09001..09003` are seeded (OFD / delivered / in transit); `MERCHANT-10001` is intentionally left free for the evaluator.
-13. **Unlocalized messages** – three rarely used buyer messages (`clarify.prepaid_unavailable`, `clarify.rto_unavailable`, `ack.thanks`) fall back to English; everything on the main flow is localized in en/hi/te/ta/kn.
+13. **Localization** – every buyer-facing template is localized in en/hi/te/ta/kn (translations are best-effort and should be reviewed by native speakers before production).
 
 ## Trade-offs
 * **Mock LLM** is deterministic keyword/regex NLU (English + Romanized/native Hindi, Telugu, Tamil, Kannada). It is convincing on the demo phrases, not a general NLU. The `LLMProvider` interface is where a real model plugs in; the deterministic core is unaffected.
@@ -29,4 +29,4 @@
 * **In-memory mock-carrier state**; restarting the mock loses its bookings (Zippy passes enough context for control triggers to keep working).
 
 ## Not done / future
-Webhook replay protection by timestamp window, real queues/outbox, OpenTelemetry, merchant login, per-merchant negotiated rates, Postman collection, load tests, real WhatsApp/IVR/SMS providers, pagination on list endpoints, e2e browser tests in CI.
+Webhook replay protection by timestamp window, real queues/outbox, OpenTelemetry, merchant login, per-merchant negotiated rates, load tests, real WhatsApp/IVR/SMS providers, pagination on list endpoints, e2e browser tests in CI.

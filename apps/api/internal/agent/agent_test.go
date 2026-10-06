@@ -221,7 +221,8 @@ func TestInterpretRemark(t *testing.T) {
 func TestTemplatesCoverFiveLanguagesForCoreFlow(t *testing.T) {
 	core := []string{"contact.CUST_UNAVAILABLE", "contact.CUST_REFUSED", "contact.ADDRESS_ISSUE", "contact.PHONE_UNREACHABLE", "contact.COD_NOT_READY", "contact.FUTURE_DELIVERY",
 		"contact.ACCESS_RESTRICTED", "contact.SUSPECT_FALSE_ATTEMPT", "contact.OUT_OF_AREA", "reminder", "clarify.confirm", "clarify.unknown", "offer.date_hold_window", "offer.date_cutoff",
-		"submitted", "accepted.reattempt", "accepted.rto", "accepted.generic", "approval.pending", "approval.rejected", "rejected.carrier", "escalated", "offer.prepaid", "payment.link"}
+		"submitted", "accepted.reattempt", "accepted.rto", "accepted.generic", "approval.pending", "approval.rejected", "rejected.carrier", "escalated", "offer.prepaid", "payment.link",
+		"clarify.prepaid_unavailable", "clarify.rto_unavailable", "ack.thanks", "clarify.declined", "clarify.address", "clarify.phone", "ask.reason", "ask.cod_date"}
 	for _, k := range core {
 		if !FullyLocalized(k) {
 			t.Errorf("template %s is not localized in all five languages", k)
