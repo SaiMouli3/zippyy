@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from app.carriers.base import CarrierAdapter, CarrierError, HttpCall, money
-from app.domain.carrier_types import NormalizedEvent, NormalizedRate, NormalizedShipment
+from app.domain.carrier_types import NdrActionResult, NormalizedEvent, NormalizedRate, NormalizedShipment
 from app.domain.enums import ShipmentStatus as S
 
 STATUS_MAP = {
@@ -12,6 +12,7 @@ STATUS_MAP = {
     "DELIVERED": S.DELIVERED,
     "UNDELIVERED": S.DELIVERY_FAILED,
     "RETURNED_TO_ORIGIN": S.RTO,
+    "RTO_DELIVERED": S.RTO_DELIVERED,
 }
 
 
@@ -80,4 +81,28 @@ class FastShipAdapter(CarrierAdapter):
             location=payload.get("location"),
             event_time=datetime.fromisoformat(payload["timestamp"]),
             raw=payload,
+            reason=payload.get("ndr_reason"),
         )
+
+    _ACTIONS = {"reattempt": "REATTEMPT", "reschedule": "RESCHEDULE", "rto": "RTO"}
+
+    def build_ndr_action_request(self, action, awb, requested_date, window, idempotency_key) -> HttpCall:
+        if action not in self._ACTIONS:
+            raise CarrierError(f"FastShip does not support {action}")
+        slot = None
+        if window:
+            slot = window.replace(":00", "")  # "18:00-21:00" -> "18-21"
+        return HttpCall("POST", "/mock/fastship/api/v1/ndr/actions", json={
+            "awb": awb, "action": self._ACTIONS[action], "preferred_date": requested_date, "slot": slot,
+            "client_request_id": idempotency_key,
+        })
+
+    def normalize_ndr_action_response(self, status_code, response) -> NdrActionResult:
+        if response.get("success") and response.get("status") == "ACCEPTED":
+            return NdrActionResult("accepted", response.get("request_id"), raw=response)
+        if response.get("status") == "PENDING":
+            return NdrActionResult("pending", response.get("request_id"), raw=response)
+        return NdrActionResult("rejected", response.get("request_id"), response.get("error") or "rejected", response)
+
+    def build_ndr_status_request(self, idempotency_key, reference) -> HttpCall:
+        return HttpCall("GET", f"/mock/fastship/api/v1/ndr/actions/{idempotency_key}")

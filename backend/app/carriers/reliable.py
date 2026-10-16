@@ -2,7 +2,7 @@ import re
 from datetime import datetime, timezone
 
 from app.carriers.base import CarrierAdapter, CarrierError, HttpCall, money
-from app.domain.carrier_types import NormalizedEvent, NormalizedRate, NormalizedShipment
+from app.domain.carrier_types import NdrActionResult, NormalizedEvent, NormalizedRate, NormalizedShipment
 from app.domain.enums import ShipmentStatus as S
 
 STATUS_MAP = {
@@ -13,6 +13,7 @@ STATUS_MAP = {
     450: S.DELIVERY_FAILED,
     500: S.DELIVERED,
     600: S.RTO,
+    700: S.RTO_DELIVERED,
 }
 
 
@@ -98,4 +99,25 @@ class ReliableCourierAdapter(CarrierAdapter):
             location=n.get("place"),
             event_time=datetime.strptime(n["ts"], "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc),
             raw=payload,
+            reason=n.get("reasonCode"),
         )
+
+    _ACTIONS = {"reattempt": "reattempt", "reschedule": "reschedule", "rto": "rto", "phone_change": "phone"}
+
+    def build_ndr_action_request(self, action, awb, requested_date, window, idempotency_key) -> HttpCall:
+        if action not in self._ACTIONS:
+            raise CarrierError(f"ReliableCourier does not support {action}")
+        return HttpCall("PUT", "/mock/reliablecourier/ndr", json={
+            "trackingCode": awb, "op": self._ACTIONS[action], "date": requested_date, "window": window,
+            "requestKey": idempotency_key,
+        })
+
+    def normalize_ndr_action_response(self, status_code, response) -> NdrActionResult:
+        if response.get("code") == 200 and response.get("state") == "accepted":
+            return NdrActionResult("accepted", response.get("ref"), raw=response)
+        if response.get("code") == 202:
+            return NdrActionResult("pending", response.get("ref"), raw=response)
+        return NdrActionResult("rejected", response.get("ref"), response.get("message") or "rejected", response)
+
+    def build_ndr_status_request(self, idempotency_key, reference) -> HttpCall:
+        return HttpCall("GET", f"/mock/reliablecourier/ndr/{idempotency_key}")

@@ -9,17 +9,20 @@ _RANK = {
     S.DELIVERY_FAILED: 4,
     S.DELIVERED: 5,
     S.RTO: 5,
+    S.RTO_DELIVERED: 6,
 }
-TERMINAL = {S.DELIVERED, S.RTO}
+TERMINAL = {S.DELIVERED, S.RTO_DELIVERED}
 
 
 def is_valid_transition(current: S, new: S) -> bool:
-    """Forward moves are allowed (carriers may skip scans). Backwards moves are not,
-    except a failed attempt can go back out for delivery. Terminal states are final."""
+    """Forward moves are allowed (carriers may skip scans). Backwards moves are not, except a failed attempt can
+    go back out for delivery. Delivered and returned-to-origin are final; an RTO can only complete."""
     if current == new:
         return False
     if current in TERMINAL:
         return False
+    if current == S.RTO:
+        return new == S.RTO_DELIVERED
     if current == S.DELIVERY_FAILED and new == S.OUT_FOR_DELIVERY:
         return True
     return _RANK[new] > _RANK[current]

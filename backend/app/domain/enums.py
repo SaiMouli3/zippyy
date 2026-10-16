@@ -17,6 +17,7 @@ class OrderStatus(str, Enum):
     DELIVERED = "DELIVERED"
     DELIVERY_FAILED = "DELIVERY_FAILED"
     RTO = "RTO"
+    RTO_DELIVERED = "RTO_DELIVERED"
 
 
 class ShipmentStatus(str, Enum):
@@ -29,3 +30,4 @@ class ShipmentStatus(str, Enum):
     DELIVERY_FAILED = "DELIVERY_FAILED"
     DELIVERED = "DELIVERED"
     RTO = "RTO"
+    RTO_DELIVERED = "RTO_DELIVERED"
