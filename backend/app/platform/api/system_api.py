@@ -440,7 +440,7 @@ async def stream(request: Request, p: Principal = Depends(get_principal)):
             await asyncio.sleep(1.5)
 
     return StreamingResponse(gen(), media_type="text/event-stream",
-                             headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no", "Connection": "keep-alive"})
+                             headers={"Cache-Control": "no-store, no-transform", "X-Accel-Buffering": "no", "Connection": "keep-alive"})
 
 
 # ================================================================== provider webhooks
