@@ -198,7 +198,7 @@ function QueueBlock({ def, data, loading }: { def: { key: string; label: string;
         <ul className="space-y-1">
           {data.items.slice(0, 3).map((it) => (
             <li key={it.id}>
-              <Link href={`/ndr/${it.id}`} className="-mx-1.5 flex items-center gap-2 rounded px-1.5 py-1 text-[12px] hover:bg-zy-paper">
+              <Link prefetch={false} href={`/ndr/${it.id}`} className="-mx-1.5 flex items-center gap-2 rounded px-1.5 py-1 text-[12px] hover:bg-zy-paper">
                 <span className="whitespace-nowrap font-mono text-[11.5px] text-fg-strong">{it.code}</span>
                 <span className="min-w-0 flex-1 truncate text-fg-muted">{it.customerName ?? "—"} · {NDR_REASON[it.reason] ?? it.reason} · {CARRIERS[it.carrier] ?? it.carrier}</span>
                 <span className="shrink-0"><SlaCell compact iso={it.slaDueAt} closed={["resolved", "closed_no_response"].includes(it.status)} /></span>

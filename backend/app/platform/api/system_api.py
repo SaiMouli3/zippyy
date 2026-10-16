@@ -293,7 +293,8 @@ def integrations(p: Principal = Depends(require("integrations.read")), db: Sessi
         last_processed = sysdb.scalar(select(func.max(Job.finished_at)).where(Job.status == "done"))
     finally:
         sysdb.close()
-    worker_alive = bool(last_processed and clock.now() - clock.as_utc(last_processed) < timedelta(minutes=10)) or (queued == 0)
+    # Healthy means nothing due is waiting too long; it does not claim recent activity (see lastProcessedAt).
+    worker_alive = not (queued > 0 and oldest is not None and clock.now() - clock.as_utc(oldest) > timedelta(minutes=2))
     return {"providers": providers, "carriers": carrier_rows,
             "webhooks": {"last24h": inbox, "quarantinedOpen": quarantine},
             "jobs": {"due": queued, "scheduled": scheduled, "running": running, "dead24h": dead,

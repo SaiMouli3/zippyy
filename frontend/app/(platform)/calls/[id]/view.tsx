@@ -102,7 +102,7 @@ export function CallView() {
                 { k: "Provider", v: c.provider === "simulator" ? "Simulator" : "Sarvam" }, { k: "Provider call ID", v: c.providerCallId ? <Mono className="text-[11.5px]">{c.providerCallId}</Mono> : "—" },
                 { k: "Scheduled", v: c.scheduledFor ? absolute(c.scheduledFor) : "—" }, { k: "Started", v: c.startedAt ? absolute(c.startedAt) : "—" },
                 { k: "Answered", v: c.answeredAt ? absolute(c.answeredAt) : "—" }, { k: "Duration", v: duration(c.durationSeconds) },
-                { k: "Provider status", v: c.providerRawStatus ?? "—" }, { k: "Cost", v: c.costPaise !== null ? money(c.costPaise) : "Not reported" },
+                { k: "Provider status", v: c.providerRawStatus ?? "—" }, { k: "Cost", v: c.costPaise === null ? "Not reported" : c.provider === "simulator" ? `${money(c.costPaise)} (simulated)` : money(c.costPaise) },
               ]} />
               {c.errorMessage && <p className="mt-2 text-2xs text-danger">{c.errorCode}: {c.errorMessage}</p>}
             </div>

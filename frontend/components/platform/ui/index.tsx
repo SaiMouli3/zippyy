@@ -262,7 +262,7 @@ export function Freshness({ at, fetching, onRefresh }: { at: string | number | n
 
 // ------------------------------------------------------------------ form controls
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(function Input({ className, ...rest }, ref) {
-  return <input ref={ref} {...rest} className={cx("h-8 w-full rounded-md border border-line-strong bg-surface px-2.5 text-[13px] text-fg-strong placeholder:text-fg-subtle focus:border-fg-subtle focus:outline-none", className)} />;
+  return <input ref={ref} {...rest} className={cx("h-8 w-full rounded-md border border-line-strong bg-surface px-2.5 text-[13px] text-fg-strong placeholder:text-fg-subtle focus:border-fg-subtle focus:outline-none disabled:cursor-not-allowed disabled:bg-zy-paper-2 disabled:text-fg-muted", className)} />;
 });
 
 export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {

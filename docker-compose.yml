@@ -1,3 +1,38 @@
+# Local / single-host stack. Secrets come from .env (copy .env.example); nothing secret is committed here.
+x-backend-env: &backend-env
+  APP_ENV: ${APP_ENV:-development}
+  DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-zippy}:${POSTGRES_PASSWORD:-zippy}@postgres:5432/${POSTGRES_DB:-zippy}
+  REDIS_URL: redis://redis:6379/0
+  SECRET_KEY: ${SECRET_KEY:-}
+  PII_ENCRYPTION_KEY: ${PII_ENCRYPTION_KEY:-}
+  PII_HASH_KEY: ${PII_HASH_KEY:-}
+  VOICE_WEBHOOK_SECRET: ${VOICE_WEBHOOK_SECRET:-}
+  SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
+  CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+  # Mock carriers live inside the API container, so the carrier and public URLs point at the API itself.
+  CARRIER_BASE_URL: ${CARRIER_BASE_URL:-http://backend:8000}
+  # Where providers and mock carriers call back. Inside compose that is the API service; for live Sarvam
+  # callbacks set it to the public HTTPS origin of the API.
+  ZIPPY_PUBLIC_URL: ${ZIPPY_PUBLIC_URL:-http://backend:8000}
+  CARRIER_WEBHOOK_SIGNATURE_REQUIRED: ${CARRIER_WEBHOOK_SIGNATURE_REQUIRED:-false}
+  WHATSAPP_PROVIDER: ${WHATSAPP_PROVIDER:-simulator}
+  META_PHONE_NUMBER_ID: ${META_PHONE_NUMBER_ID:-}
+  META_ACCESS_TOKEN: ${META_ACCESS_TOKEN:-}
+  META_APP_SECRET: ${META_APP_SECRET:-}
+  META_VERIFY_TOKEN: ${META_VERIFY_TOKEN:-}
+  VOICE_PROVIDER: ${VOICE_PROVIDER:-simulator}
+  SARVAM_API_KEY: ${SARVAM_API_KEY:-}
+  SARVAM_AGENTS_API_KEY: ${SARVAM_AGENTS_API_KEY:-}
+  SARVAM_ORG_ID: ${SARVAM_ORG_ID:-}
+  SARVAM_WORKSPACE_ID: ${SARVAM_WORKSPACE_ID:-}
+  SARVAM_APP_ID: ${SARVAM_APP_ID:-}
+  SARVAM_APP_VERSION: ${SARVAM_APP_VERSION:-0}
+  SARVAM_CONNECTION_ID: ${SARVAM_CONNECTION_ID:-}
+  SARVAM_AGENT_PHONE_NUMBER: ${SARVAM_AGENT_PHONE_NUMBER:-}
+  INTENT_EXTRACTOR: ${INTENT_EXTRACTOR:-rules}
+  LANGUAGE_DETECTOR: ${LANGUAGE_DETECTOR:-heuristic}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -11,7 +46,7 @@ services:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-zippy}"]
       interval: 3s
       timeout: 3s
-      retries: 15
+      retries: 20
 
   redis:
     image: redis:7-alpine
@@ -19,37 +54,64 @@ services:
       test: ["CMD", "redis-cli", "ping"]
       interval: 3s
       timeout: 3s
-      retries: 15
+      retries: 20
 
-  backend:
+  # One-shot: apply Alembic migrations (including row-level security) before anything else starts.
+  migrate:
     build: ./backend
-    environment:
-      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-zippy}:${POSTGRES_PASSWORD:-zippy}@postgres:5432/${POSTGRES_DB:-zippy}
-      REDIS_URL: redis://redis:6379/0
-      # Mock carriers live in this same container, so "carrier" and "Zippy public" URLs point at ourselves.
-      CARRIER_BASE_URL: http://localhost:8000
-      ZIPPY_PUBLIC_URL: http://localhost:8000
-      CARRIER_RATE_TIMEOUT_SECONDS: ${CARRIER_RATE_TIMEOUT_SECONDS:-2.5}
-      CARRIER_BOOKING_TIMEOUT_SECONDS: ${CARRIER_BOOKING_TIMEOUT_SECONDS:-5}
-      RATE_CACHE_TTL_SECONDS: ${RATE_CACHE_TTL_SECONDS:-300}
-      CORS_ORIGINS: http://localhost:3000
-    ports:
-      - "8000:8000"
+    command: ["alembic", "upgrade", "head"]
+    environment: *backend-env
     depends_on:
       postgres:
         condition: service_healthy
+
+  backend:
+    build: ./backend
+    environment: *backend-env
+    ports:
+      - "8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
+
+  # Executes jobs (agent steps, timers, provider sends, carrier requests, reconciliation) and publishes the outbox.
+  # Scale with `docker compose up --scale worker=3`; jobs are claimed with SKIP LOCKED leases.
+  worker:
+    build: ./backend
+    command: ["python", "-m", "app.platform.worker"]
+    environment: *backend-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      disable: true
 
   frontend:
     build:
       context: ./frontend
       args:
+        BACKEND_URL: http://backend:8000
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
     ports:
       - "3000:3000"
     depends_on:
       - backend
+
+  # Optional fictional demo data: `docker compose --profile demo run --rm seed`
+  seed:
+    profiles: ["demo"]
+    build: ./backend
+    command: ["python", "-m", "app.platform.seed", "--demo"]
+    environment:
+      <<: *backend-env
+      DEMO_PASSWORD: ${DEMO_PASSWORD:-}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
 
 volumes:
   pgdata:

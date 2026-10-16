@@ -48,7 +48,7 @@ export function ConversationsView() {
           <ul className={cx("divide-y divide-line", list.isPlaceholderData && "opacity-60")}>
             {list.data!.items.map((c) => (
               <li key={c.id}>
-                <Link href={`/conversations/${c.id}`} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 hover:bg-zy-paper sm:flex-nowrap">
+                <Link prefetch={false} href={`/conversations/${c.id}`} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 hover:bg-zy-paper sm:flex-nowrap">
                   <div className="w-48 shrink-0">
                     <p className="truncate text-[13px] font-medium text-fg-strong">{c.customerName ?? "Unknown customer"}</p>
                     <Mono className="text-2xs text-fg-muted">{c.phoneMasked}</Mono>

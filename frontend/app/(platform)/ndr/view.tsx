@@ -97,7 +97,7 @@ export function NdrView() {
     },
     { id: "code", header: "Case", cell: ({ row: { original: r } }) => (
       <div className="flex items-center gap-1.5">
-        <Link href={`/ndr/${r.id}`} className="font-mono text-[12px] font-medium text-fg-strong hover:text-zy-brand hover:underline" onClick={(e) => e.stopPropagation()}>{r.code}</Link>
+        <Link prefetch={false} href={`/ndr/${r.id}`} className="font-mono text-[12px] font-medium text-fg-strong hover:text-zy-brand hover:underline" onClick={(e) => e.stopPropagation()}>{r.code}</Link>
         {r.priority === "urgent" && <Tooltip text="Urgent priority"><span className="rounded bg-danger px-1 text-[10px] font-bold uppercase leading-4 text-white">!</span></Tooltip>}
         {r.hasOpenEscalation && <Tooltip text="Open escalation"><UserRoundCog className="h-3.5 w-3.5 text-danger" aria-label="Open escalation" /></Tooltip>}
       </div>) },

@@ -55,7 +55,7 @@ export function ShipmentsView() {
               <tbody className="divide-y divide-line">
                 {list.data!.items.map((s) => (
                   <tr key={s.id} className="cursor-pointer hover:bg-zy-paper" onClick={(e) => { if (!(e.target as HTMLElement).closest("a")) router.push(`/shipments/${s.id}`); }}>
-                    <td className="whitespace-nowrap px-3 py-2"><Link href={`/shipments/${s.id}`} className="font-mono text-[12px] font-medium text-fg-strong hover:underline">{s.code}</Link><div><Mono className="text-2xs text-fg-muted">{s.awb}</Mono></div></td>
+                    <td className="whitespace-nowrap px-3 py-2"><Link prefetch={false} href={`/shipments/${s.id}`} className="font-mono text-[12px] font-medium text-fg-strong hover:underline">{s.code}</Link><div><Mono className="text-2xs text-fg-muted">{s.awb}</Mono></div></td>
                     <td className="whitespace-nowrap px-3 py-2">{s.orderRef}</td>
                     <td className="whitespace-nowrap px-3 py-2">{s.customerName ?? "—"}<div><Mono className="text-2xs text-fg-muted">{s.phoneMasked}</Mono></div></td>
                     <td className="whitespace-nowrap px-3 py-2">{s.city ?? "—"}<div className="text-2xs text-fg-muted">{s.pincode}</div></td>
@@ -63,7 +63,7 @@ export function ShipmentsView() {
                     <td className="whitespace-nowrap px-3 py-2">{s.paymentMode === "COD" ? <>COD <span className="num text-fg-muted">{money(s.codAmountPaise)}</span></> : <span className="text-fg-muted">{title(s.paymentMode?.toLowerCase())}</span>}</td>
                     <td className="whitespace-nowrap px-3 py-2"><StatusBadge map={SHIPMENT_STATUS} value={s.status} /></td>
                     <td className="num px-3 py-2">{s.attempts}</td>
-                    <td className="whitespace-nowrap px-3 py-2">{s.ndrCaseId ? <Link href={`/ndr/${s.ndrCaseId}`} className="inline-flex items-center gap-1.5 hover:underline"><Mono className="text-[11.5px]">{s.ndrCode}</Mono><StatusBadge map={NDR_STATUS} value={s.ndrStatus} /></Link> : <span className="text-fg-subtle">—</span>}</td>
+                    <td className="whitespace-nowrap px-3 py-2">{s.ndrCaseId ? <Link prefetch={false} href={`/ndr/${s.ndrCaseId}`} className="inline-flex items-center gap-1.5 hover:underline"><Mono className="text-[11.5px]">{s.ndrCode}</Mono><StatusBadge map={NDR_STATUS} value={s.ndrStatus} /></Link> : <span className="text-fg-subtle">—</span>}</td>
                     <td className="whitespace-nowrap px-3 py-2 text-fg-muted"><Timestamp iso={s.lastEventAt} /></td>
                     <td className="whitespace-nowrap px-3 py-2 text-fg-muted"><Timestamp iso={s.createdAt} /></td>
                   </tr>

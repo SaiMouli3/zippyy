@@ -54,7 +54,7 @@ export function EscalationsView() {
                 {list.data!.items.map((e) => (
                   <tr key={e.id} className="cursor-pointer hover:bg-zy-paper" onClick={(ev) => { if (!(ev.target as HTMLElement).closest("a")) router.push(`/escalations/${e.id}`); }}>
                     <td className="whitespace-nowrap px-3 py-2.5">
-                      <Link href={`/escalations/${e.id}`} className="font-mono text-[12px] font-medium text-fg-strong hover:text-zy-brand hover:underline">{e.code}</Link>
+                      <Link prefetch={false} href={`/escalations/${e.id}`} className="font-mono text-[12px] font-medium text-fg-strong hover:text-zy-brand hover:underline">{e.code}</Link>
                       {e.pendingDecisionId && <Badge tone="warn" dot={false} className="ml-2">Needs approval</Badge>}
                       {e.supervisorRequested && <Badge tone="info" dot={false} className="ml-1">Supervisor</Badge>}
                     </td>
@@ -64,7 +64,7 @@ export function EscalationsView() {
                       <div className="truncate text-2xs text-fg-muted">{e.summary}</div>
                     </td>
                     <td className="whitespace-nowrap px-3 py-2.5">
-                      {e.ndrCode ? <Link href={`/ndr/${e.ndrCaseId}`} className="font-mono text-[12px] hover:underline">{e.ndrCode}</Link> : "—"}
+                      {e.ndrCode ? <Link prefetch={false} href={`/ndr/${e.ndrCaseId}`} className="font-mono text-[12px] hover:underline">{e.ndrCode}</Link> : "—"}
                       <div className="text-2xs text-fg-muted">{e.ndrReason ? NDR_REASON[e.ndrReason] ?? e.ndrReason : ""}</div>
                     </td>
                     <td className="whitespace-nowrap px-3 py-2.5">{e.customerName ?? "—"}</td>

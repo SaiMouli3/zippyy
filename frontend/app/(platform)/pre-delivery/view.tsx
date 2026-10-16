@@ -73,7 +73,7 @@ export function PreDeliveryView() {
               <tbody className="divide-y divide-line">
                 {list.data!.items.map((r) => (
                   <tr key={r.taskId} className="hover:bg-zy-paper">
-                    <td className="whitespace-nowrap px-3 py-2"><Link href={`/shipments/${r.shipmentId}`} className="font-medium text-fg-strong hover:underline">{r.orderRef ?? "—"}</Link><div><Mono className="text-2xs text-fg-muted">{r.awb}</Mono></div></td>
+                    <td className="whitespace-nowrap px-3 py-2"><Link prefetch={false} href={`/shipments/${r.shipmentId}`} className="font-medium text-fg-strong hover:underline">{r.orderRef ?? "—"}</Link><div><Mono className="text-2xs text-fg-muted">{r.awb}</Mono></div></td>
                     <td className="whitespace-nowrap px-3 py-2">{r.customerName ?? "—"}<div className="text-2xs text-fg-muted">{r.paymentMode}</div></td>
                     <td className="px-3 py-2"><LangTag code={r.language} /></td>
                     <td className="whitespace-nowrap px-3 py-2">{r.carrier ? CARRIERS[r.carrier] ?? r.carrier : "—"}</td>

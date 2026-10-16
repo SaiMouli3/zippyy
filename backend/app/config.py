@@ -10,7 +10,8 @@ _DEV_WEBHOOK_SECRET = "dev-only-webhook-secret"
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    # Empty variables (e.g. unset compose interpolations) fall back to defaults; production guards still apply.
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore", env_ignore_empty=True)
 
     app_env: str = "development"  # development | test | production
 

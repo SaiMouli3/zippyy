@@ -51,7 +51,7 @@ export function CallsView() {
               <tbody className="divide-y divide-line">
                 {list.data!.items.map((c) => (
                   <tr key={c.id} className="cursor-pointer hover:bg-zy-paper" onClick={(e) => { if (!(e.target as HTMLElement).closest("a")) router.push(`/calls/${c.id}`); }}>
-                    <td className="whitespace-nowrap px-3 py-2"><Link href={`/calls/${c.id}`} className="font-mono text-[12px] font-medium text-fg-strong hover:underline">{c.code}</Link><div className="text-2xs text-fg-muted">attempt {c.attemptNo}</div></td>
+                    <td className="whitespace-nowrap px-3 py-2"><Link prefetch={false} href={`/calls/${c.id}`} className="font-mono text-[12px] font-medium text-fg-strong hover:underline">{c.code}</Link><div className="text-2xs text-fg-muted">attempt {c.attemptNo}</div></td>
                     <td className="whitespace-nowrap px-3 py-2">{c.customerName ?? "—"}<div><Mono className="text-2xs text-fg-muted">{c.phoneMasked}</Mono></div></td>
                     <td className="whitespace-nowrap px-3 py-2">{title(c.purpose)}</td>
                     <td className="whitespace-nowrap px-3 py-2"><StatusBadge map={CALL_STATUS} value={c.status} /></td>
@@ -61,7 +61,7 @@ export function CallsView() {
                         {c.languageSwitchCount > 0 && <Languages className="h-3.5 w-3.5 text-zy-brand" aria-label={`${c.languageSwitchCount} language switches`} />}</span>
                     </td>
                     <td className="num whitespace-nowrap px-3 py-2">{duration(c.durationSeconds)}</td>
-                    <td className="whitespace-nowrap px-3 py-2">{c.ndrCaseId ? <Link href={`/ndr/${c.ndrCaseId}`} className="font-mono text-[12px] hover:underline">{c.ndrCode}</Link> : <span className="text-fg-subtle">—</span>}</td>
+                    <td className="whitespace-nowrap px-3 py-2">{c.ndrCaseId ? <Link prefetch={false} href={`/ndr/${c.ndrCaseId}`} className="font-mono text-[12px] hover:underline">{c.ndrCode}</Link> : <span className="text-fg-subtle">—</span>}</td>
                     <td className="whitespace-nowrap px-3 py-2 text-fg-muted"><Timestamp iso={c.startedAt ?? c.at} /></td>
                   </tr>
                 ))}
