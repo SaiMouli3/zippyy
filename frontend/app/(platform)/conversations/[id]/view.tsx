@@ -50,7 +50,7 @@ export function ConversationView() {
             <PanelHeader title="WhatsApp service window" />
             <div className="px-4 py-3 text-[12.5px]">
               {inWindow ? (
-                <p className="flex items-start gap-2 text-ok"><Clock className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />Open until <Timestamp iso={new Date(windowEnds!).toISOString()} mode="absolute" />. The agent may reply in free text.</p>
+                <p className="flex items-start gap-2 text-ok"><Clock className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden /><span>Open until <Timestamp iso={new Date(windowEnds!).toISOString()} mode="absolute" />. The agent may reply in free text.</span></p>
               ) : (
                 <Notice>{c.lastInboundAt ? "Closed: the customer last wrote more than 24 hours ago." : "The customer has not written yet."} Only approved message templates can be sent until they reply.</Notice>
               )}
