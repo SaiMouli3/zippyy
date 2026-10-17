@@ -82,6 +82,8 @@ class Settings(BaseSettings):
     llm_base_url: str = ""  # OpenAI-compatible endpoint root, e.g. https://gateway.example/v1
     llm_api_key: str = ""
     llm_model: str = ""
+    llm_call_policy: str = "unclear_only"  # unclear_only (rules first, cheapest) | always
+    llm_min_rule_confidence: float = 0.8  # rule answers at or above this never reach the model
     sarvam_llm_model: str = "sarvam-105b"
     language_detector: str = "heuristic"  # heuristic | sarvam
 

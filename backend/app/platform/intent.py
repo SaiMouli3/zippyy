@@ -368,13 +368,40 @@ class SarvamLLMExtractor:
             return r
 
 
+class RulesFirstExtractor:
+    """Cost control: the free deterministic rules answer every reply they understand confidently; the model is
+    called only for the rest. Messages the rules flag as manipulation attempts are never sent to the model."""
+
+    def __init__(self, llm: "SarvamLLMExtractor", min_rule_confidence: float):
+        self.rules = RuleExtractor()
+        self.llm = llm
+        self.min_rule_confidence = min_rule_confidence
+        self.name = f"rules+{llm.name}"
+
+    def extract(self, text: str, ctx: ExtractionContext) -> IntentResult:
+        r = self.rules.extract(text, ctx)
+        flagged = r.intent == "other" and r.validation_status == "invalid"
+        if flagged or (r.intent not in ("unclear", "other") and r.confidence >= self.min_rule_confidence):
+            return r
+        out = self.llm.extract(text, ctx)
+        if out.extractor.endswith(":fallback"):
+            return r  # model unavailable or rejected: keep the rules' own answer
+        out.notes = [*out.notes, f"rules were unsure ({r.intent}, {r.confidence:.2f}); asked the model"]
+        return out
+
+
 def get_extractor():
     from app.config import get_settings
     s = get_settings()
+    llm = None
     if s.intent_extractor == "sarvam_llm" and s.sarvam_api_key:
         from app.platform.providers.sarvam import SarvamClient
-        return SarvamLLMExtractor(SarvamClient(), s.sarvam_llm_model)
-    if s.intent_extractor == "openai_compatible" and s.llm_base_url and s.llm_api_key and s.llm_model:
+        llm = SarvamLLMExtractor(SarvamClient(), s.sarvam_llm_model)
+    elif s.intent_extractor == "openai_compatible" and s.llm_base_url and s.llm_api_key and s.llm_model:
         from app.platform.providers.openai_compat import OpenAICompatClient
-        return SarvamLLMExtractor(OpenAICompatClient(), s.llm_model)
-    return RuleExtractor()
+        llm = SarvamLLMExtractor(OpenAICompatClient(), s.llm_model)
+    if llm is None:
+        return RuleExtractor()
+    if s.llm_call_policy == "unclear_only":
+        return RulesFirstExtractor(llm, s.llm_min_rule_confidence)
+    return llm

@@ -112,3 +112,13 @@ def test_append_only_history_cannot_be_rewritten_by_the_app_role(pg):
             c.execute(text("SET LOCAL ROLE zippy_app"))
             c.execute(text("select set_config('app.system','on',true)"))
             c.execute(text("delete from audit_logs where action = 'test.write'"))
+
+
+def test_dashboard_and_integration_aggregates_run_on_postgres(pg):
+    """SQLite accepts some GROUP BY shapes that PostgreSQL rejects; run the aggregate helpers on the real database."""
+    from app.platform.api.system_api import _intent_usage
+    s = _session(pg, system=True)
+    try:
+        assert _intent_usage(s, "00000000-0000-0000-0000-000000000000") == {"modelCalls24h": 0, "extractions24h": 0}
+    finally:
+        s.close()

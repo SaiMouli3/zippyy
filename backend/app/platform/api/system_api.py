@@ -247,6 +247,15 @@ def _state(stats: dict, mode: str) -> str:
     return "connected"
 
 
+def _intent_usage(db: Session, merchant_id: str) -> dict:
+    from app.platform.models import IntentExtraction
+    since = clock.now() - timedelta(hours=24)
+    f = [IntentExtraction.merchant_id == merchant_id, IntentExtraction.created_at >= since]
+    total = db.scalar(select(func.count()).select_from(IntentExtraction).where(*f)) or 0
+    model = db.scalar(select(func.count()).select_from(IntentExtraction).where(*f, IntentExtraction.extractor.like("llm:%"))) or 0
+    return {"modelCalls24h": int(model), "extractions24h": int(total)}
+
+
 def _intent_provider(s) -> dict:
     if s.intent_extractor == "sarvam_llm" and s.sarvam_api_key:
         name, detail = s.sarvam_llm_model, "Sarvam chat completions with JSON-schema output; falls back to rules"
@@ -283,7 +292,7 @@ def integrations(p: Principal = Depends(require("integrations.read")), db: Sessi
              "detail": "Simulated: the in-house conversation engine plays scripted demo customers" if voice_mode == "simulated" else (
                  "Sarvam hosted voice agent (instant outbound)" if voice_mode == "live" else
                  "Set SARVAM_AGENTS_API_KEY, SARVAM_ORG_ID, SARVAM_WORKSPACE_ID, SARVAM_APP_ID, SARVAM_APP_VERSION, SARVAM_CONNECTION_ID, SARVAM_AGENT_PHONE_NUMBER")},
-            _intent_provider(s),
+            {**_intent_provider(s), **_intent_usage(db, p.merchant_id)},
         ]
         carrier_rows = []
         for c in sysdb.scalars(select(Carrier).order_by(Carrier.name)):

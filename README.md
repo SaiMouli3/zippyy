@@ -119,7 +119,9 @@ first-party and no CORS is needed.
    - concurrent calls and the daily voice budget
 4. **Understanding replies.** A multilingual rule extractor (Hindi, Telugu, Tamil, Kannada, English, romanized and
    code-mixed) is used by default, with prompt-injection guards. Optionally, Sarvam chat completions with JSON-schema
-   output, or any OpenAI-compatible model API, can be used instead, falling back to the rules on any failure. Language is detected per turn, with
+   output, or any OpenAI-compatible model API, can be added. By default the rules answer first and the model only
+   sees replies the rules are unsure about (`LLM_CALL_POLICY=unclear_only`), which keeps model cost low; any model
+   failure falls back to the rules. Messages flagged as manipulation attempts never reach the model. Language is detected per turn, with
    hysteresis before switching.
 5. **Policy engine.** Rules `R01`–`R14` are deterministic and versioned (`rules-2026.10.1`). The language model
    proposes; the engine returns `ALLOWED`, `REQUIRES_APPROVAL` or `DENIED`, with the rules that fired. Carrier tools

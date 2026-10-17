@@ -169,3 +169,12 @@ def test_request_size_limit_and_sanitized_errors(world):
     assert r.status_code == 413
     r = world.client.post("/api/v1/auth/login", json={"email": 1})
     assert r.status_code == 422 and "input" not in r.text  # submitted values are never echoed
+
+
+def test_integrations_reports_intent_usage(world):
+    world.merchant()
+    world.login()
+    r = world.client.get("/api/v1/integrations")
+    assert r.status_code == 200, r.text
+    intent = next(p for p in r.json()["providers"] if p["id"] == "intent")
+    assert intent["provider"] == "rules" and intent["modelCalls24h"] == 0 and "extractions24h" in intent

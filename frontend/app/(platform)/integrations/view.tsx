@@ -12,7 +12,7 @@ import type { Tone } from "@/lib/platform/labels";
 import { title } from "@/lib/platform/labels";
 
 interface Stats { calls1h: number; errors1h: number; errorRate1h: number | null; p95LatencyMs: number | null; lastSuccessAt: string | null }
-interface Provider extends Stats { id: string; name: string; provider: string; mode: string; state: string; detail: string }
+interface Provider extends Stats { id: string; name: string; provider: string; mode: string; state: string; detail: string; modelCalls24h?: number; extractions24h?: number }
 interface CarrierRow extends Stats { code: string; name: string; mode: string; active: boolean; state: string }
 interface Integrations {
   providers: Provider[]; carriers: CarrierRow[];
@@ -55,7 +55,17 @@ export function IntegrationsView() {
                       <p className="mt-0.5 text-2xs text-fg-muted">{p.detail}</p>
                     </div>
                   </div>
-                  {p.id !== "intent" && <div className="mt-3 border-t border-line pt-3"><ProviderStats s={p} /></div>}
+                  {p.id !== "intent" ? <div className="mt-3 border-t border-line pt-3"><ProviderStats s={p} /></div> : (
+                    <div className="mt-3 border-t border-line pt-3 text-[12px]">
+                      <p className="text-2xs text-fg-subtle">Customer replies read (24 h)</p>
+                      <p className="mt-0.5 text-fg-strong">
+                        <span className="num font-medium">{num(p.extractions24h ?? 0)}</span> total ·{" "}
+                        <span className="num font-medium">{num(p.modelCalls24h ?? 0)}</span> sent to the AI model
+                        {p.extractions24h ? <span className="text-fg-muted"> ({pct((p.modelCalls24h ?? 0) / p.extractions24h, 0)})</span> : null}
+                      </p>
+                      <p className="mt-0.5 text-2xs text-fg-muted">{p.mode === "live" ? "The rules answer first; the model is only asked when they are unsure." : "All replies are read by the built-in rules at no cost."}</p>
+                    </div>
+                  )}
                 </Panel>
               );
             })}
