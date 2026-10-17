@@ -65,6 +65,12 @@ class ExtractionContext:
 _TOMORROW = r"\b(tomorrow|tmrw|tmr|kal|repu|naalai|naale)\b|कल|రేపు|நாளை|ನಾಳೆ"
 _DAY_AFTER = r"\b(day after tomorrow|day after|parso|parson|ellundi|naalai marunaal|naadiddu)\b|परसों|ఎల్లుండి|நாளை மறுநாள்|ನಾಡಿದ್ದು"
 _TODAY = r"\b(today|aaj|ivala|eeroju|inniku|indru|ivattu|ee roju)\b|आज|ఈరోజు|ఈ రోజు|இன்று|ಇಂದು"
+# Words that tie a mentioned day to the delivery. A longer message that names a day without any of these
+# ("what is the weather today") is not a delivery request.
+_DELIVERY_CUE = (r"\b(deliver\w*|deliv|send|bring|come|drop|try|attempt|reattempt|parcel|package|order|courier|slot|"
+                 r"available|home|ghar|bhej\w*|bhijwa\w*|aao|aaiye|aana|aa\s?jao|aa\s?jana|laao|lao|de\s?do|pampu|"
+                 r"pampandi|ra|randi|anuppu\w*|vaa|vaanga|vaango|kodu|kalisi|banni|tegond\w*)\b|"
+                 r"भेज|आइए|आना|आओ|आ जा|लाना|डिलीवरी|घर|పంప|రండి|రా|డెలివరీ|ఇంటి|அனுப்ப|வா|டெலிவரி|வீட்|ಕಳುಹ|ಬನ್ನಿ|ಬಾ|ಡೆಲಿವರಿ|ಮನೆ")
 _WEEKDAYS = {"monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3, "friday": 4, "saturday": 5, "sunday": 6,
              "somvar": 0, "mangalvar": 1, "budhvar": 2, "guruvar": 3, "shukravar": 4, "shanivar": 5, "ravivar": 6}
 _MONTHS = {m: i + 1 for i, m in enumerate(["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct",
@@ -234,6 +240,10 @@ class RuleExtractor:
             intent, conf, cod_ready = "cod_not_ready", 0.8, False
             if requested_date:
                 notes.append("customer can pay on a later date")
+        elif (requested_date is not None and len(t.split()) > 4 and not window and ctx.expecting != "date"
+              and not re.search(_DELIVERY_CUE, t)):
+            intent, conf = "unclear", 0.4
+            notes.append("a day was mentioned without anything tying it to the delivery")
         elif requested_date is not None:
             if requested_date == ctx.today:
                 intent = "reattempt_today"

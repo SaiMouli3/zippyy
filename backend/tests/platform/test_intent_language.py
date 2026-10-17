@@ -77,3 +77,16 @@ def test_switch_tracker_needs_strong_or_repeated_evidence():
 def test_validate_respects_threshold():
     r = X.extract("yes", CTX)
     assert validate(r, CTX, threshold=0.95).clarification_needed
+
+
+@pytest.mark.parametrize("text", ["what is the weather today", "is today a holiday in your city",
+                                  "aaj holiday hai kya bhai sab", "आज मौसम कैसा है भाई बताओ"])
+def test_day_mentioned_off_topic_is_not_a_delivery_request(text):
+    r = RuleExtractor().extract(text, CTX)
+    assert r.intent == "unclear" and r.requested_date is None
+
+
+@pytest.mark.parametrize("text,intent", [("tomorrow", "reschedule"), ("kal", "reschedule"), ("come tomorrow", "reschedule"),
+                                         ("aaj shaam ko bhej do", "reattempt_today"), ("aaj aa jao ghar pe hoon", "reattempt_today")])
+def test_short_or_delivery_tied_day_still_counts(text, intent):
+    assert RuleExtractor().extract(text, CTX).intent == intent
