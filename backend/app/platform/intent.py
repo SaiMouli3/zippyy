@@ -374,4 +374,7 @@ def get_extractor():
     if s.intent_extractor == "sarvam_llm" and s.sarvam_api_key:
         from app.platform.providers.sarvam import SarvamClient
         return SarvamLLMExtractor(SarvamClient(), s.sarvam_llm_model)
+    if s.intent_extractor == "openai_compatible" and s.llm_base_url and s.llm_api_key and s.llm_model:
+        from app.platform.providers.openai_compat import OpenAICompatClient
+        return SarvamLLMExtractor(OpenAICompatClient(), s.llm_model)
     return RuleExtractor()

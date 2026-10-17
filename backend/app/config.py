@@ -78,7 +78,10 @@ class Settings(BaseSettings):
     voice_webhook_secret: str = _DEV_WEBHOOK_SECRET
     provider_timeout_seconds: float = 8.0
 
-    intent_extractor: str = "rules"  # rules | sarvam_llm
+    intent_extractor: str = "rules"  # rules | sarvam_llm | openai_compatible
+    llm_base_url: str = ""  # OpenAI-compatible endpoint root, e.g. https://gateway.example/v1
+    llm_api_key: str = ""
+    llm_model: str = ""
     sarvam_llm_model: str = "sarvam-105b"
     language_detector: str = "heuristic"  # heuristic | sarvam
 

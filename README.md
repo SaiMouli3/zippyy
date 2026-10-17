@@ -119,7 +119,7 @@ first-party and no CORS is needed.
    - concurrent calls and the daily voice budget
 4. **Understanding replies.** A multilingual rule extractor (Hindi, Telugu, Tamil, Kannada, English, romanized and
    code-mixed) is used by default, with prompt-injection guards. Optionally, Sarvam chat completions with JSON-schema
-   output can be used instead, falling back to the rules on any failure. Language is detected per turn, with
+   output, or any OpenAI-compatible model API, can be used instead, falling back to the rules on any failure. Language is detected per turn, with
    hysteresis before switching.
 5. **Policy engine.** Rules `R01`–`R14` are deterministic and versioned (`rules-2026.10.1`). The language model
    proposes; the engine returns `ALLOWED`, `REQUIRES_APPROVAL` or `DENIED`, with the rules that fired. Carrier tools
@@ -141,7 +141,7 @@ first-party and no CORS is needed.
 |---|---|---|
 | WhatsApp | Meta Cloud API; inbound verified with `X-Hub-Signature-256`; webhook `GET/POST /api/v1/providers/whatsapp/meta` | Signed simulator replies through the same ingestion path |
 | Voice | Sarvam hosted voice agent, instant outbound; callback `POST /api/v1/providers/voice/sarvam?call=…&token=…` (per-call HMAC token, because Sarvam documents no webhook signature) | In-house conversation engine with scripted fictional customers |
-| Language & intent | Sarvam `/text-lid`, speech-to-text (`saaras`), text-to-speech (`bulbul:v3`), chat (`sarvam-105b`) | Heuristic script and lexicon detector, rule extractor |
+| Language & intent | Sarvam `/text-lid`, speech-to-text (`saaras`), text-to-speech (`bulbul:v3`), chat (`sarvam-105b`); or any OpenAI-compatible API (`INTENT_EXTRACTOR=openai_compatible` with `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`) | Heuristic script and lexicon detector, rule extractor |
 | Carriers | Adapters per carrier; webhooks `POST /api/webhooks/{fastship,quickexpress,reliable}` with `X-Carrier-Signature` | Mock carriers with behaviour controls (accept, reject, timeout-then-accept, pending, server error) |
 
 Demo data is fictional: `.test` email domains, generated `+91 90000 xxxxx` numbers, `DEMO` in every AWB, and "(Demo)" in every workspace name.

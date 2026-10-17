@@ -247,6 +247,20 @@ def _state(stats: dict, mode: str) -> str:
     return "connected"
 
 
+def _intent_provider(s) -> dict:
+    if s.intent_extractor == "sarvam_llm" and s.sarvam_api_key:
+        name, detail = s.sarvam_llm_model, "Sarvam chat completions with JSON-schema output; falls back to rules"
+    elif s.intent_extractor == "openai_compatible" and s.llm_base_url and s.llm_api_key and s.llm_model:
+        from urllib.parse import urlparse
+        name, detail = s.llm_model, f"OpenAI-compatible API at {urlparse(s.llm_base_url).netloc}; output schema-validated, falls back to rules"
+    else:
+        return {"id": "intent", "name": "Intent extraction", "provider": "rules", "mode": "local", "state": "connected",
+                "detail": "Deterministic multilingual rules (no external calls)" + (
+                    f" — INTENT_EXTRACTOR={s.intent_extractor} is set but its credentials are missing"
+                    if s.intent_extractor != "rules" else "")}
+    return {"id": "intent", "name": "Intent extraction", "provider": name, "mode": "live", "state": "connected", "detail": detail}
+
+
 @router.get("/api/v1/integrations")
 def integrations(p: Principal = Depends(require("integrations.read")), db: Session = Depends(tenant_db)):
     s = get_settings()
@@ -269,10 +283,7 @@ def integrations(p: Principal = Depends(require("integrations.read")), db: Sessi
              "detail": "Simulated: the in-house conversation engine plays scripted demo customers" if voice_mode == "simulated" else (
                  "Sarvam hosted voice agent (instant outbound)" if voice_mode == "live" else
                  "Set SARVAM_AGENTS_API_KEY, SARVAM_ORG_ID, SARVAM_WORKSPACE_ID, SARVAM_APP_ID, SARVAM_APP_VERSION, SARVAM_CONNECTION_ID, SARVAM_AGENT_PHONE_NUMBER")},
-            {"id": "intent", "name": "Intent extraction", "provider": "sarvam-105b" if (s.intent_extractor == "sarvam_llm" and s.sarvam_api_key) else "rules",
-             "mode": "live" if (s.intent_extractor == "sarvam_llm" and s.sarvam_api_key) else "local",
-             "state": "connected", "detail": "Deterministic multilingual rules (no external calls)" if s.intent_extractor != "sarvam_llm"
-             else "Sarvam chat completions with JSON-schema output; falls back to rules"},
+            _intent_provider(s),
         ]
         carrier_rows = []
         for c in sysdb.scalars(select(Carrier).order_by(Carrier.name)):
