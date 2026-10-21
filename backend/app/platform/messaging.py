@@ -11,6 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.platform import clock, contact_guard, i18n, jobs, outbox
+from app.platform.providers.whatsapp import whatsapp_live
 from app.platform import language as lang_svc
 from app.platform.models import (AgentTask, Conversation, Customer, Merchant, Message, MessageStatusEvent,
                                  MessageTemplate)
@@ -67,6 +68,9 @@ def queue_template(db: Session, merchant: Merchant, customer: Customer, code: st
     existing = db.scalars(select(Message).where(Message.idempotency_key == idempotency_key)).first()
     if existing is not None:
         return existing
+    if not whatsapp_live(merchant.is_demo):
+        # Live workspace without a real WhatsApp connection: a simulated "delivered" would be a lie to the operator.
+        raise Blocked("whatsapp_not_connected")
     template, exact = template_for(db, merchant.id, code, language)
     if template is None:
         raise Blocked(f"no_approved_template:{code}")
@@ -101,6 +105,9 @@ def queue_session_text(db: Session, merchant: Merchant, customer: Customer, conv
     existing = db.scalars(select(Message).where(Message.idempotency_key == idempotency_key)).first()
     if existing is not None:
         return existing
+    if not whatsapp_live(merchant.is_demo):
+        # Live workspace without a real WhatsApp connection: a simulated "delivered" would be a lie to the operator.
+        raise Blocked("whatsapp_not_connected")
     if not in_session(conv):
         raise Blocked("outside_session_window")
     guard = contact_guard.check(db, merchant, customer, "whatsapp", "reply", conv.shipment_id, conv.ndr_case_id,

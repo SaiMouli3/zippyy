@@ -56,7 +56,10 @@ class PreDeliveryWorkflow(Workflow):
             return
         lang = self.contact_language().language
         if "whatsapp" not in self.cfg.channels:
-            self.on_deadline(data)  # no WhatsApp: go straight to the confirmation call (COD only)
+            if self.order.payment_type == "COD" and "voice" in self.cfg.channels:
+                self.on_deadline(data)  # no WhatsApp: go straight to the confirmation call
+            else:
+                self.done("not contacted: no WhatsApp connection and the order is prepaid")
             return
         code = self.order.code or self.order.merchant_order_id
         try:
