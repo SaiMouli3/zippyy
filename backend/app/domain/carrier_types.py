@@ -42,3 +42,14 @@ class NormalizedEvent:
     location: str | None
     event_time: datetime
     raw: dict = field(default_factory=dict)
+    reason: str | None = None  # carrier's own NDR reason code/remark on failed attempts
+
+
+@dataclass
+class NdrActionResult:
+    """Carrier's answer to an NDR instruction. `pending` = accepted for processing, final answer later."""
+
+    status: str  # accepted | rejected | pending | unknown
+    reference: str | None = None
+    reason: str | None = None
+    raw: dict = field(default_factory=dict)

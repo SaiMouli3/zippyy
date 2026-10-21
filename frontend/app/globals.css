@@ -1,3 +1,26 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  html { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+  body { @apply bg-canvas text-fg font-body text-[13px] leading-5; }
+  h1, h2, h3, h4 { @apply font-heading text-fg-strong; }
+  :focus-visible { outline: 2px solid #D54029; outline-offset: 2px; }
+  ::selection { background: #FBEDEA; }
+  table { font-variant-numeric: tabular-nums; }
+}
+
+@layer components {
+  .skeleton {
+    background: linear-gradient(90deg, #F2F2F2 0px, #E9E9E9 40px, #F2F2F2 80px);
+    background-size: 800px 100%;
+    @apply animate-shimmer rounded;
+  }
+  .scrollbar-thin { scrollbar-width: thin; scrollbar-color: #D6D6D6 transparent; }
+  .num { font-variant-numeric: tabular-nums; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}

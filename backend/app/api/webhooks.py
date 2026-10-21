@@ -1,34 +1,41 @@
-from fastapi import APIRouter, Body, Depends, HTTPException
-from sqlalchemy.orm import Session
+"""Carrier tracking webhooks. Raw body is kept for signature verification and the webhook inbox."""
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
 
-from app.carriers.registry import get_adapter_by_slug
-from app.db import get_db
-from app.services import tracking as track_svc
+from app.db import new_session
+from app.platform.ingest import IngestError, ingest_webhook
 
 router = APIRouter(prefix="/api/webhooks", tags=["webhooks"])
 
 
-def _handle(slug: str, payload: dict, db: Session) -> dict:
-    adapter = get_adapter_by_slug(slug)
+def _ingest(source: str, headers: dict, raw: bytes, query: dict) -> dict:
+    db = new_session(system=True)
     try:
-        event = adapter.normalize_webhook(payload)
-    except (KeyError, ValueError, TypeError) as exc:
-        raise HTTPException(422, f"unrecognised {adapter.name} webhook payload: {exc!r}")
-    r = track_svc.ingest_event(db, event)
+        return ingest_webhook(db, source, headers, raw, query)
+    finally:
+        db.close()
+
+
+async def _handle(slug: str, request: Request) -> dict:
+    raw = await request.body()
+    try:
+        r = await run_in_threadpool(_ingest, f"carrier:{slug}", dict(request.headers), raw, dict(request.query_params))
+    except IngestError as exc:
+        raise HTTPException(exc.status, exc.message)
     # Always 200 for duplicates / ignored events so carriers don't retry them forever.
-    return {"outcome": r.outcome, "currentStatus": r.current_status, "reason": r.reason}
+    return {"outcome": r["outcome"], "currentStatus": r.get("currentStatus"), "reason": r.get("reason")}
 
 
 @router.post("/fastship")
-def fastship(payload: dict = Body(...), db: Session = Depends(get_db)):
-    return _handle("fastship", payload, db)
+async def fastship(request: Request):
+    return await _handle("fastship", request)
 
 
 @router.post("/quickexpress")
-def quickexpress(payload: dict = Body(...), db: Session = Depends(get_db)):
-    return _handle("quickexpress", payload, db)
+async def quickexpress(request: Request):
+    return await _handle("quickexpress", request)
 
 
 @router.post("/reliable")
-def reliable(payload: dict = Body(...), db: Session = Depends(get_db)):
-    return _handle("reliable", payload, db)
+async def reliable(request: Request):
+    return await _handle("reliable", request)

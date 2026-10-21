@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
 from app.carriers.base import CarrierAdapter, CarrierError, HttpCall, money
-from app.domain.carrier_types import NormalizedEvent, NormalizedRate, NormalizedShipment
+from app.domain.carrier_types import NdrActionResult, NormalizedEvent, NormalizedRate, NormalizedShipment
 from app.domain.enums import ShipmentStatus as S
 
 STATUS_MAP = {
@@ -12,6 +12,7 @@ STATUS_MAP = {
     "DELIVERED": S.DELIVERED,
     "DELIVERY_ATTEMPT_FAILED": S.DELIVERY_FAILED,
     "RTO_INITIATED": S.RTO,
+    "RTO_DELIVERED": S.RTO_DELIVERED,
 }
 
 
@@ -81,4 +82,28 @@ class QuickExpressAdapter(CarrierAdapter):
             location=(payload.get("hub") or {}).get("city"),
             event_time=datetime.fromtimestamp(payload["occurredAt"] / 1000, tz=timezone.utc),  # epoch millis
             raw=payload,
+            reason=payload.get("failureReason"),
         )
+
+    _ACTIONS = {"reattempt": "RE_ATTEMPT", "rto": "RTO", "address_change": "UPDATE_ADDRESS",
+                "phone_change": "UPDATE_PHONE"}
+
+    def build_ndr_action_request(self, action, awb, requested_date, window, idempotency_key) -> HttpCall:
+        if action not in self._ACTIONS:
+            raise CarrierError(f"QuickExpress does not support {action}")
+        return HttpCall("POST", "/mock/quickexpress/ndr/instructions", json={
+            "awb": awb, "instruction": self._ACTIONS[action], "reattemptDate": requested_date,
+            "idempotencyKey": idempotency_key,
+        })
+
+    def normalize_ndr_action_response(self, status_code, response) -> NdrActionResult:
+        state = response.get("result") or response.get("state")
+        ref = response.get("instructionId")
+        if state in ("APPLIED", "ACCEPTED"):
+            return NdrActionResult("accepted", ref, raw=response)
+        if state == "QUEUED":
+            return NdrActionResult("pending", ref, raw=response)
+        return NdrActionResult("rejected", ref, response.get("reason") or "rejected", response)
+
+    def build_ndr_status_request(self, idempotency_key, reference) -> HttpCall:
+        return HttpCall("GET", "/mock/quickexpress/ndr/instructions", params={"idempotencyKey": idempotency_key})

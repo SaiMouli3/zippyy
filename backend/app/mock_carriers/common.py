@@ -14,6 +14,16 @@ from fastapi import HTTPException
 LIFECYCLE = ["CREATED", "PICKED_UP", "IN_TRANSIT", "OUT_FOR_DELIVERY", "DELIVERED"]
 EXCEPTIONS = {"DELIVERY_FAILED", "RTO"}
 
+# Carrier-side NDR reason vocabulary (each carrier renders these its own way).
+NDR_REASONS = {
+    "CUSTOMER_UNAVAILABLE": "Consignee not available",
+    "REFUSED": "Consignee refused delivery",
+    "ADDRESS_ISSUE": "Address incomplete / not found",
+    "PHONE_UNREACHABLE": "Consignee phone switched off",
+    "COD_NOT_READY": "Cash not ready",
+    "OTHER": "Delivery could not be attempted",
+}
+
 
 # ---------------------------------------------------------------- chaos switches
 _chaos: dict[str, dict] = {}
@@ -88,14 +98,79 @@ def next_status_of(s: MockShipment) -> str | None:
     return LIFECYCLE[LIFECYCLE.index(s.status) + 1]
 
 
+# ---------------------------------------------------------------- NDR instructions
+# idempotency key -> stored response; the same key always returns the same answer (as a real carrier API would).
+_ndr_requests: dict[str, dict] = {}
+# Per-AWB behaviour for demos/tests: accept | reject | timeout_then_accept | pending_then_accept | pending_then_reject
+_ndr_behaviour: dict[str, str] = {}
+
+
+def set_ndr_behaviour(awb: str, behaviour: str) -> None:
+    _ndr_behaviour[awb] = behaviour
+
+
+def ndr_decide(awb: str, requested_date: str | None, max_days: int) -> tuple[str, str | None]:
+    """Returns (state, reason): state in accepted | rejected | timeout | pending."""
+    behaviour = _ndr_behaviour.get(awb, "accept")
+    if behaviour == "reject":
+        return "rejected", "Reattempt not possible: shipment already marked for return"
+    if requested_date:
+        try:
+            days = (datetime.fromisoformat(requested_date).date() - utcnow().date()).days
+        except ValueError:
+            return "rejected", "Invalid date"
+        if days > max_days:
+            return "rejected", f"Date beyond {max_days}-day window"
+    if behaviour == "timeout_then_accept":
+        return "timeout", None
+    if behaviour == "server_error":
+        return "server_error", None
+    if behaviour.startswith("pending_then"):
+        return "pending", None
+    return "accepted", None
+
+
+def ndr_store(key: str, record: dict) -> dict:
+    return _ndr_requests.setdefault(key, record)
+
+
+def ndr_lookup(key: str) -> dict | None:
+    rec = _ndr_requests.get(key)
+    if rec and rec.get("state") == "pending":
+        # The carrier finishes processing asynchronously; by the time anyone asks again it has decided.
+        behaviour = _ndr_behaviour.get(rec.get("awb", ""), "pending_then_accept")
+        rec["state"] = "rejected" if behaviour == "pending_then_reject" else "accepted"
+        if rec["state"] == "rejected":
+            rec["reason"] = "Hub capacity full for requested date"
+    return rec
+
+
+def sign_webhook(zippy_slug: str, payload: dict) -> tuple[bytes, dict]:
+    """Carriers sign webhooks with a shared secret: X-Carrier-Signature = hex(HMAC-SHA256(secret, body))."""
+    import hashlib
+    import hmac
+    import json
+
+    from app.config import get_settings
+
+    secret = getattr(get_settings(), f"carrier_webhook_secret_{zippy_slug}")
+    raw = json.dumps(payload, separators=(",", ":")).encode()
+    return raw, {"content-type": "application/json",
+                 "x-carrier-signature": hmac.new(secret.encode(), raw, hashlib.sha256).hexdigest()}
+
+
 def reset_state() -> None:
     _shipments.clear()
     _counters.clear()
     _chaos.clear()
+    _ndr_requests.clear()
+    _ndr_behaviour.clear()
 
 
 def utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    # The mock carriers follow the platform clock so simulated time (demo seeding, tests) stays consistent.
+    from app.platform import clock
+    return clock.now() if clock else datetime.now(timezone.utc)
 
 
 LOCATIONS = {
@@ -106,4 +181,5 @@ LOCATIONS = {
     "DELIVERED": "Hyderabad - Customer Address",
     "DELIVERY_FAILED": "Hyderabad Delivery Station",
     "RTO": "Hyderabad Delivery Station",
+    "RTO_DELIVERED": "Bengaluru Origin Hub",
 }

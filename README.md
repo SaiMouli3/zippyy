@@ -1,149 +1,212 @@
-# Zippy – logistics aggregation MVP (first vertical slice)
+# Zippyy — multilingual delivery & NDR autonomy
 
-WhatsApp / voice agent → Zippy backend → 3 mock carriers → normalized quotes → select → book → webhooks → tracking.
-
-## 1. Architecture
-
-```
- WhatsApp (mock endpoint)      Voice (MockVoiceProvider)        Admin dashboard (Next.js)
-   POST /api/agent/message       POST /api/voice/mock-call         REST calls
-            │                             │                             │
-            └────────── AgentService ─────┘                             │
-                        AgentProvider (rule-based today, LLM later)     │
-                               │ only through ZippyTools                │
-                               ▼                                        ▼
- ┌─ API layer ───────────── app/api/*  (FastAPI routes, schemas, error mapping) ───────────┐
- ├─ Application services ── app/services/{orders,rates,shipments,tracking}.py              │
- ├─ Domain ───────────────── app/domain/*  (enums, status-transition rules, neutral types) ┤
- ├─ Carrier adapter interface  app/carriers/base.py  CarrierAdapter                        │
- ├─ Carrier implementations ── fastship.py · quickexpress.py · reliable.py                 │
- └─ External carrier APIs ──── app/mock_carriers/*  (mounted in-process; separate modules) ┘
-        ▲ Postgres (orders, quotes, shipments, events)      ▲ Redis (rate cache, conversation state)
-```
-
-Rules enforced by structure:
-* Services and agents only see `NormalizedRate / NormalizedShipment / NormalizedEvent` (`app/domain/carrier_types.py`).
-  Carrier-specific JSON exists only inside `app/carriers/<carrier>.py`.
-* `app/agent/*` never imports an adapter or an HTTP client (there is a test for that). It calls `ZippyTools`, which calls services.
-* Adapters reach carriers through `CARRIER_BASE_URL` over real HTTP, so the mock carriers are already "remote" and can be moved out.
-
-Key behaviours
-* **Rates**: all carriers called concurrently (`asyncio.gather`), each with its own timeout; a failing/slow carrier lands in `failedCarriers`, the rest are returned, sorted by total. Quotes are stored per fetch (`batch_id`).
-* **Cache**: key `zippy:rates:{merchant}:{pickup}:{delivery}:{grams}:{l}:{w}:{h}:{payment}:{cod}`, TTL 5 min. `POST …/rates?refresh=true` bypasses it. Partial results (a carrier failed) are *not* cached. Cache outages degrade to live calls.
-* **Select**: quote must belong to the order, be in the latest batch, be unexpired (15 min), and `quotedAmount` must equal the stored total. The amount on the shipment is copied from the stored quote (never from the client).
-* **Book**: idempotent (a second call returns the same tracking number). Booking is not auto-retried (a timeout may still have booked at the carrier).
-* **Webhooks**: each carrier has its own payload format → `normalize_webhook`. Idempotency key = `{carrier}:{event id}` (hash fallback), unique in DB. Duplicates return 200 `duplicate`; backwards moves (e.g. `DELIVERED → IN_TRANSIT`) return 200 `ignored` and change nothing (200 so the carrier doesn't retry forever).
-
-## 2. Folder structure
+Zippyy runs delivery recovery for Indian D2C brands. Before an attempt, it asks customers whether they will be available.
+After a failed attempt (NDR), it contacts them on WhatsApp and by voice, in their language. It turns their answer into
+a carrier request, but only if the merchant's deterministic policy allows it. Operators work the exceptions in a web
+console that follows the zippyy.ai design system.
 
 ```
-backend/
-  app/
-    main.py config.py db.py models.py schemas.py cache.py http.py
-    api/            orders.py shipments.py webhooks.py agent.py
-    services/       orders.py rates.py shipments.py tracking.py
-    domain/         enums.py errors.py tracking.py carrier_types.py
-    carriers/       base.py registry.py fastship.py quickexpress.py reliable.py
-    mock_carriers/  common.py control.py fastship.py quickexpress.py reliablecourier.py
-    agent/          tools.py provider.py rule_based.py voice.py
-  tests/            52 tests (SQLite + fakeredis, carriers called in-process)
-frontend/           Next.js + TS + Tailwind: /orders, /orders/[id], …/rates, …/tracking, /mock
-docker-compose.yml  .env.example
+ Carriers ──webhooks──► Webhook inbox ──► Tracking ──► NDR case ──► Agent task ─┐
+ Meta WhatsApp ─────────►   (dedupe,       (state       (read      (durable,     │
+ Sarvam voice ──────────►   quarantine)     machine)     model)     timers)      │
+                                                                                 ▼
+          ┌──────── Workflows: NDR recovery · Pre-delivery confirmation ───────────┐
+          │ typed tools only ─► contact guard ─► providers (WhatsApp, Sarvam voice) │
+          │ intent extraction (rules / Sarvam LLM, schema-validated)               │
+          │ policy engine R01–R14 (deterministic) ─► carrier action ─► reconcile   │
+          │ escalation inbox for anything that needs a person                      │
+          └────────────────────────────────────────────────────────────────────────┘
+ Postgres (RLS per merchant) · job queue (SKIP LOCKED) · transactional outbox ─► SSE ─► Next.js console
 ```
 
-## 3. Setup
+## What is in this repository
+
+| Path | What it is |
+|---|---|
+| `backend/app/platform/` | The platform: tenancy, auth, policy, agents, providers, event processing, v1 API |
+| `backend/app/platform/workflows/` | `ndr_recovery_agent` and `delivery_readiness_agent` on a durable workflow engine |
+| `backend/app/platform/api/` | v1 REST API (68 routes) and the server-sent event stream |
+| `backend/migrations/` | Alembic: `0001` MVP baseline, `0002` platform schema, `0003` row-level security and app role |
+| `backend/app/carriers`, `app/mock_carriers` | Carrier adapters (tracking + NDR actions) and three mock carriers with distinct APIs |
+| `frontend/app/(platform)/` | Operator console: 14 sections, from Overview to Settings |
+| `frontend/app/site/` | Marketing page built from `docs/zippyy-design-system.md` |
+| `docs/` | Design system extracted from zippyy.ai, and the original MVP sandbox notes |
+
+## Run it
+
+### Docker (single host)
 
 ```bash
-cp .env.example .env
-docker compose up --build
-# frontend http://localhost:3000   backend http://localhost:8000/docs
+cp .env.example .env                       # defaults work locally; set secrets for anything shared
+docker compose up --build                  # postgres, redis, migrate (one-shot), backend, worker, frontend
+docker compose --profile demo run --rm seed   # optional: fictional demo workspaces, prints a password once
 ```
 
-Without Docker (needs local Postgres + Redis, or point `DATABASE_URL` at SQLite):
-```bash
-cd backend && pip install -r requirements-dev.txt
-DATABASE_URL=sqlite:///./dev.db REDIS_URL=redis://localhost:6379/0 uvicorn app.main:app --reload
-python -m pytest            # tests need no Postgres/Redis
-cd ../frontend && npm install && npm run dev
-```
-Tables are created on startup (`create_all`); there are no migrations yet.
+Open http://localhost:3000. Scale workers with `docker compose up --scale worker=3`; jobs are claimed with
+`FOR UPDATE SKIP LOCKED` leases, so workers never double-process.
 
-## 4. Sample curl
+### Without Docker
 
 ```bash
-H='Content-Type: application/json'; API=http://localhost:8000
+# backend (Python 3.12, Postgres 16, Redis 7)
+cd backend && pip install -r requirements.txt -r requirements-dev.txt
+export DATABASE_URL=postgresql+psycopg://zippy:zippy@localhost:5432/zippy REDIS_URL=redis://localhost:6379/0
+alembic upgrade head
+DEMO_PASSWORD='choose-a-local-password' python -m app.platform.seed --demo   # optional
+uvicorn app.main:app --port 8000 &
+python -m app.platform.worker &
 
-# order
-ORDER=$(curl -s -X POST $API/api/orders -H "$H" -d '{
-  "customerName":"Asha Rao","customerPhone":"9876543210","pickupPincode":"560001","deliveryPincode":"500001",
-  "weightGrams":2000,"lengthCm":20,"widthCm":15,"heightCm":10,"paymentType":"COD","codAmount":2000}' | jq -r .id)
-
-# rates (3 carriers, normalized, cheapest first); repeat it -> "cached": true
-curl -s -X POST $API/api/orders/$ORDER/rates | jq
-curl -s -X POST "$API/api/orders/$ORDER/rates?refresh=true" | jq .cached
-
-# select + book
-curl -s -X POST $API/api/orders/$ORDER/select-carrier -H "$H" \
-  -d '{"carrierCode":"FASTSHIP","serviceCode":"FAST-AIR","quotedAmount":195.2}' | jq
-TRACK=$(curl -s -X POST $API/api/orders/$ORDER/shipment | tee /dev/stderr | jq -r .trackingNumber)
-
-# advance the carrier (it fires the webhook to Zippy), then track
-curl -s -X POST $API/mock/fastship/shipments/$TRACK/next-status | jq
-curl -s -X POST "$API/mock/fastship/shipments/$TRACK/next-status?duplicate=true" | jq .deliveries   # applied + duplicate
-curl -s $API/api/orders/$ORDER/tracking | jq
-
-# raw mock carriers + failure simulation
-curl -s -X POST "$API/mock/fastship/api/v1/rate?failure=true" -H "$H" -d '{"weight_kg":2}' -o /dev/null -w "%{http_code}\n"   # 500
-curl -s -X POST "$API/mock/fastship/api/v1/rate?delay=3000"  -H "$H" -d '{"weight_kg":2}'                                   # slow
-curl -s "$API/mock/reliablecourier/shipping-options?from=560001&to=500001&weight=2&cod=true&amount=2000" | jq
-curl -s -X PUT "$API/mock/quickexpress/config?delay=3000"      # make QuickExpress slow for ALL calls (reset: no params)
-curl -s -X PUT "$API/mock/fastship/config?failure=true"        # make FastShip fail for all calls
-
-# agent (WhatsApp stand-in)
-say(){ curl -s -X POST $API/api/agent/message -H "$H" -d "{\"conversationId\":\"conv-001\",\"message\":\"$1\"}" | jq -r .reply; }
-say "I want to send a parcel."; say 560001; say 500001; say "2 kg"; say "COD, ₹2000"; say "Book FastShip"; say "Where is my shipment?"
-
-# voice (scripted call through MockVoiceProvider, same tools)
-curl -s -X POST $API/api/voice/mock-call -H "$H" -d '{"utterances":["send a 2kg prepaid parcel from 560001 to 500001","book fastship","where is my shipment"]}' | jq
+# frontend (Node 20)
+cd frontend && npm ci
+BACKEND_URL=http://localhost:8000 npm run build && BACKEND_URL=http://localhost:8000 node .next/standalone/server.js
+# or for development: BACKEND_URL=http://localhost:8000 npm run dev
 ```
-Webhook endpoints (`/api/webhooks/{fastship,quickexpress,reliable}`) can also be hit by hand; see `mock_carriers/*.py::build_webhook` for each payload shape.
-Extra mock switches: `next-status?event=delivery_failed|rto` (from any live state), `GET /mock/shipments`, `GET /mock/config`.
 
-## 5. Demo flow (5 minutes)
+The browser only talks to the Next.js origin: `/api/v1/*` is proxied to `BACKEND_URL`, so session cookies stay
+first-party and no CORS is needed.
 
-1. `/orders` → create an order (or message the agent: "I want to send a 2kg parcel from 560001 to 500001").
-2. Agent / **Shipping options** page shows 4 options from 3 carriers with different native formats, normalized & sorted. Click *Get rates* again → "served from Redis cache".
-3. `/mock` → tick **FastShip: fail** (or *slow*) → *Refresh (skip cache)* on the options page: the other carriers still answer, FastShip appears under "unavailable". Untick it.
-4. Book FastShip (button, or tell the agent "Book FastShip") → tracking number appears.
-5. `/mock` → **Trigger Next Status** repeatedly; `/orders/{id}/tracking` (auto-refreshes) shows each webhook landing: PICKED_UP → IN_TRANSIT → OUT_FOR_DELIVERY → DELIVERED.
-6. Ask the agent "Where is my shipment?" at any point.
-7. Idempotency: `next-status?duplicate=true` → second delivery is `duplicate`; POST an old status payload to the webhook → `ignored`.
+## Security model
 
-## 6. Where real providers plug in
+- **Tenancy.** Every tenant table has `FORCE ROW LEVEL SECURITY` keyed on `app.merchant_id`, which is set per
+  transaction from the authenticated session (never from a request body or query). The app connects as the
+  non-owner `zippy_app` role, and audit and event tables are append-only for that role. A case from another
+  workspace returns 404.
+- **Authentication.** Browser sessions use an httpOnly `zpy_session` cookie; only its SHA-256 is stored, with an
+  absolute TTL, an idle timeout and revocation. CSRF uses a signed double-submit token in `X-CSRF-Token`. Passwords
+  use scrypt, with lockout after repeated failures and per-IP and per-email rate limits. API keys
+  (`zpy_live_…`, sent as `Authorization: Bearer`) are hashed, scoped, expiring and revocable.
+- **Roles.** `owner`, `ops_lead`, `ops`, `finance` and `viewer` map to explicit permissions. The UI hides what a role
+  cannot do, and the API enforces it regardless.
+- **PII.** Phone, email and address are encrypted at rest (AES-256-GCM). Phone lookups use an HMAC. Values are masked
+  everywhere by default; revealing them requires the `pii.unmask` permission and a reason, and is audited.
+  Transcript views are audited too. Retention windows hide old message bodies and transcripts.
+- **HTTP.** Request IDs, a 1 MB body limit, CSP and security headers on both apps, and error messages that never echo
+  input. Logs are JSON with PII redaction.
+- **Production guard.** `APP_ENV=production` refuses to start with development secrets or insecure cookies.
 
-**WhatsApp** (Twilio / Meta Cloud API / Gupshup): add a route such as `POST /api/channels/whatsapp` that (1) verifies the provider signature, (2) maps the inbound payload to `conversation_id = sender phone`, `message = text` (and `customer_phone`), (3) calls `AgentService(db).handle(...)` – exactly what `api/agent.py::agent_message` does – and (4) sends `reply` back with the provider's send API. Nothing inside the agent or services changes. Optional speech (Sarvam etc.) transcribes voice notes into `message` before step 3.
+## How decisions are made
 
-**LLM**: implement `AgentProvider.respond(conversation, message, tools)` (`app/agent/provider.py`) using your LLM's function calling with `TOOL_SCHEMAS` from `app/agent/tools.py`, dispatch each tool call via `tools.call(name, **args)`, register it in `get_agent_provider()` and set `AGENT_PROVIDER`. `Conversation.history` already holds the transcript.
+1. **Signals.** Carrier, WhatsApp and Sarvam webhooks land in `webhook_inbox`, de-duplicated by provider event ID
+   and signature-checked. Anything unparseable, unknown or an illegal status transition goes to `webhook_quarantine`
+   rather than being applied.
+2. **Workflows.** A failed attempt opens or updates an NDR case and wakes its `agent_task`. The workflow then acts
+   only through the typed tool registry (`tools.py`, version `2026-10.1`). Reading tools:
+   - `get_shipment_status`
+   - `get_order_details`
+   - `get_delivery_attempt_history`
+   - `get_customer_preferences`
+   - `get_allowed_delivery_options`
+   - `get_message_status`, `get_voice_call_status`
+   - `get_conversation_history`
+   - `get_carrier_action_status`
+   - `get_ndr_sla_status`
 
-**Voice** (Twilio Voice, Exotel, Plivo, LiveKit…): implement `VoiceProvider` (`handle_incoming_call`, `speak`, `collect_input`, `end_call`) in `app/agent/voice.py` – STT inside `collect_input`, TTS inside `speak` – and run `VoiceAgent(provider, AgentService(db)).run_call(call_id, caller)` from the telephony webhook/stream handler. `MockVoiceProvider` and `POST /api/voice/mock-call` show the shape; the same `ZippyTools` back both channels.
+   Writing tools:
+   - `save_delivery_preference`
+   - `send_whatsapp_template`, `send_whatsapp_reply`
+   - `schedule_voice_call`
+   - `request_reattempt`, `request_reschedule`, `request_address_change`
+   - `schedule_followup`, `cancel_obsolete_followup`
+   - `create_escalation`
+   - `record_customer_opt_out`
 
-## 7. Replacing a mock carrier with a real one
+   Every call is recorded as an agent run step with sanitized input and output. Private model reasoning is never
+   stored.
+3. **Contact guard.** Every message or call is checked against:
+   - opt-outs and consent evidence
+   - quiet hours and the voice window, in the workspace timezone
+   - per-customer and per-workspace caps (replies and confirmations are exempt)
+   - concurrent calls and the daily voice budget
+4. **Understanding replies.** A multilingual rule extractor (Hindi, Telugu, Tamil, Kannada, English, romanized and
+   code-mixed) is used by default, with prompt-injection guards. Optionally, Sarvam chat completions with JSON-schema
+   output, or any OpenAI-compatible model API, can be added. By default the rules answer first and the model only
+   sees replies the rules are unsure about (`LLM_CALL_POLICY=unclear_only`), which keeps model cost low; any model
+   failure falls back to the rules. Messages flagged as manipulation attempts never reach the model. Language is detected per turn, with
+   hysteresis before switching.
+5. **Policy engine.** Rules `R01`–`R14` are deterministic and versioned (`rules-2026.10.1`). The language model
+   proposes; the engine returns `ALLOWED`, `REQUIRES_APPROVAL` or `DENIED`, with the rules that fired. Carrier tools
+   refuse to run without an allowed or operator-approved decision. RTO, cancellation, address and phone changes
+   always need a person.
+6. **Carrier actions.** Each action carries an idempotency key. If a timeout leaves the outcome unknown, the platform
+   reconciles by asking the carrier for its status before it ever resubmits. A case shows *Carrier requested* until
+   the carrier confirms, and *Reattempt confirmed* only after it does.
+7. **Operators.** Escalations carry the full context. Operators can approve or reject a pending action, correct a
+   preference, send the escalation to a supervisor, restart contact or resolve it. Each of these needs a reason, and
+   each is audited.
+8. **Live UI.** Every state change writes an outbox event. `/api/v1/events/stream` serves them as SSE with
+   `Last-Event-ID` resume, a heartbeat every 15 s and a `resync` event if a client falls too far behind. The console
+   shows **Live** only while heartbeats arrive; otherwise it says *Reconnecting* or *Offline* and polls every 30 s.
 
-Business logic does not change; only the adapter and config do.
+## Providers
 
-1. **Credentials/URL**: give the adapter its real base URL + auth (today every adapter uses `CARRIER_BASE_URL`; use a per-carrier setting and put auth headers in `CarrierAdapter._send` or an override).
-2. **Request mapping**: edit `build_rate_request` / `build_shipment_request` in `app/carriers/<carrier>.py` to the real API's paths and fields.
-3. **Response mapping**: edit `normalize_rate_response`, `normalize_shipment_response`, and `normalize_webhook` (incl. the carrier's status vocabulary → `ShipmentStatus`, its event-id field for idempotency, and signature verification in `api/webhooks.py`).
-4. **Webhook**: register `https://<public-host>/api/webhooks/<slug>` with the carrier (`ZIPPY_PUBLIC_URL`).
-5. **Remove the mock**: delete the corresponding router from `main.py` (and `app/mock_carriers/<carrier>.py`). Keep the adapter tests, pointing them at recorded real responses.
+| Integration | Live | Simulated (demo workspaces always use these) |
+|---|---|---|
+| WhatsApp | Meta Cloud API; inbound verified with `X-Hub-Signature-256`; webhook `GET/POST /api/v1/providers/whatsapp/meta` | Signed simulator replies through the same ingestion path |
+| WhatsApp (alternative) | Self-hosted [OpenWA](https://github.com/rmyndharis/OpenWA) gateway (unofficial); webhook `POST /api/v1/providers/whatsapp/openwa` signed with `X-OpenWA-Signature` | — |
+| Voice | Sarvam hosted voice agent, instant outbound; callback `POST /api/v1/providers/voice/sarvam?call=…&token=…` (per-call HMAC token, because Sarvam documents no webhook signature) | In-house conversation engine with scripted fictional customers |
+| Language & intent | Sarvam `/text-lid`, speech-to-text (`saaras`), text-to-speech (`bulbul:v3`), chat (`sarvam-105b`); or any OpenAI-compatible API (`INTENT_EXTRACTOR=openai_compatible` with `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`) | Heuristic script and lexicon detector, rule extractor |
+| Carriers | Adapters per carrier; webhooks `POST /api/webhooks/{fastship,quickexpress,reliable}` with `X-Carrier-Signature` | Mock carriers with behaviour controls (accept, reject, timeout-then-accept, pending, server error) |
 
-Adding a *fourth* carrier: create `app/carriers/<name>.py` (subclass `CarrierAdapter`) and add one line to `registry.py`, plus a webhook route in `api/webhooks.py`. Rates, caching, selection, booking and tracking pick it up automatically.
+Demo data is fictional: `.test` email domains, generated `+91 90000 xxxxx` numbers, `DEMO` in every AWB, and "(Demo)" in every workspace name.
+A demo workspace cannot be switched to a live provider.
 
-To move the mock carriers into their own service: they already import nothing from Zippy except `app.config/app.http`; copy `app/mock_carriers/` into a new FastAPI app, set `CARRIER_BASE_URL` to it and `ZIPPY_PUBLIC_URL` to Zippy.
+## WhatsApp through OpenWA
 
-## 8. Known MVP limits
-* Mock carrier shipment state is in memory (lost on backend restart); Zippy's data is in Postgres.
-* No auth/merchant isolation, no webhook signature checks, no DB migrations, no retries for rates beyond the single timed attempt.
-* Sync SQLAlchemy inside async handlers (fine for the MVP; move to async engine or thread offload for load).
-* The rule-based agent understands only the demo phrases (pincodes, weight, prepaid/COD, "book <carrier>", tracking questions).
-* `docker-compose.yml` was written but not run in the authoring sandbox (no Docker daemon); the backend, Redis and frontend were exercised directly instead.
+OpenWA drives WhatsApp Web through reverse-engineered clients, not Meta's official API. WhatsApp can restrict or ban
+the connected number, and OpenWA itself says cold first messages to people who never wrote to you are the most
+reliable way to get restricted. NDR outreach is exactly that, so:
+
+- connect a **dedicated number** you can afford to lose, warm it up first, and keep volumes low
+  (lower the daily caps in Contact policy, and set OpenWA's `SEND_PACING_ENABLED=true`);
+- move to the Meta Cloud API (`WHATSAPP_PROVIDER=meta_cloud`) for scale or anything regulated.
+
+Setup:
+
+1. Run OpenWA (`npm install && npm run dev`, dashboard on http://localhost:2886), create a session, scan the QR code
+   with the dedicated number, and create an **operator** API key scoped to that session.
+2. In OpenWA's environment set `RESOLVE_LID_TO_PHONE=true` (otherwise replies from customers WhatsApp hides behind a
+   privacy id cannot be matched), and, when Zippyy runs on the same machine or network, allow its host in
+   `SSRF_ALLOWED_HOSTS` (OpenWA refuses private webhook URLs by default).
+3. Register the webhook:
+   ```bash
+   curl -X POST http://localhost:2785/api/sessions/<SESSION_ID>/webhooks -H "X-API-Key: <KEY>" \
+     -H "Content-Type: application/json" -d '{"url": "<ZIPPYY_API>/api/v1/providers/whatsapp/openwa",
+     "events": ["message.received", "message.ack", "message.failed"], "secret": "<OPENWA_WEBHOOK_SECRET>"}'
+   ```
+4. Set `WHATSAPP_PROVIDER=openwa`, `OPENWA_BASE_URL=http://localhost:2785/api`, `OPENWA_API_KEY`, `OPENWA_SESSION_ID`
+   and `OPENWA_WEBHOOK_SECRET` for the API and the worker, and restart them.
+
+OpenWA has no Meta templates, so first-contact messages go out as the same approved template text, filled in, in the
+customer's language. Sends carry an `Idempotency-Key`, so a timed-out send is retried without risk of a duplicate.
+Demo workspaces keep using the simulator.
+
+## Tests
+
+```bash
+cd backend && pytest -q                                   # unit + API + workflow tests on SQLite
+TEST_POSTGRES_URL=postgresql+psycopg://… pytest -q tests/platform/test_postgres.py   # RLS & SKIP LOCKED on real Postgres
+cd frontend && npx tsc --noEmit && npm run build
+E2E_PASSWORD=<demo password> node frontend/e2e/smoke.cjs    # browser smoke test against a seeded local stack
+```
+
+Automated tests never contact real customers. Providers are simulators or mocked HTTP transports.
+
+## Environment
+
+Every variable is listed and explained in [`.env.example`](.env.example). The minimum for production:
+
+- `SECRET_KEY`, `PII_ENCRYPTION_KEY`, `PII_HASH_KEY`, `VOICE_WEBHOOK_SECRET`
+- `SESSION_COOKIE_SECURE=true`, `CARRIER_WEBHOOK_SIGNATURE_REQUIRED=true` with per-carrier secrets
+- `LEGACY_SANDBOX_ENABLED=false`, `ALLOW_DEMO_SEED=false`
+- the Meta and Sarvam credentials, with `ZIPPY_PUBLIC_URL` set to the public HTTPS origin of the API
+
+## Known limits
+
+- **Live providers are untested.** The Meta and Sarvam integrations follow their published APIs but have not been run
+  against live accounts from this repository. Message templates must be approved in Meta Business Manager under the
+  same names, and the Sarvam app must be configured to accept the variables Zippyy sends.
+- **Carriers are mocks.** The three carriers are mocks. Real carrier adapters need each carrier's NDR API contract.
+- **Intent accuracy is not measured.** The analytics shows clarification rates instead; accuracy needs
+  human-labelled conversations.
+- **Vercel previews fail.** They fail until the Vercel project uses Framework Preset **Next.js** with Root Directory
+  **`frontend`**. The frontend also needs a reachable backend (`BACKEND_URL` at build time).

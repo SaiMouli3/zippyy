@@ -16,6 +16,7 @@ STATE_LABELS = {
     "DELIVERED": "DELIVERED",
     "DELIVERY_FAILED": "DELIVERY_ATTEMPT_FAILED",
     "RTO": "RTO_INITIATED",
+    "RTO_DELIVERED": "RTO_DELIVERED",
 }
 
 
@@ -56,7 +57,48 @@ async def booking_create(body: dict = Body(...)):
     }
 
 
-def build_webhook(s: c.MockShipment, status: str, event_id: str, at: datetime) -> dict:
+def build_webhook(s: c.MockShipment, status: str, event_id: str, at: datetime, reason: str | None = None) -> dict:
+    body = _webhook(s, status, event_id, at)
+    if status == "DELIVERY_FAILED":
+        body["failureReason"] = reason or "CUSTOMER_UNAVAILABLE"
+        body["note"] = c.NDR_REASONS.get(body["failureReason"], body["failureReason"])
+    return body
+
+
+@router.post("/ndr/instructions", dependencies=[Depends(c.chaos(SLUG))])
+async def ndr_instruction(body: dict = Body(...)):
+    key = body.get("idempotencyKey")
+    if not key:
+        return {"result": "REJECTED", "reason": "idempotencyKey required"}
+    existing = c.ndr_lookup(key)
+    if existing:
+        return existing["response"]
+    state, reason = c.ndr_decide(body.get("awb", ""), body.get("reattemptDate"), 2)
+    if state == "server_error":
+        from fastapi import HTTPException
+        raise HTTPException(500, "internal error")
+    ref = f"QE-NDR-{c.next_sequence('qe-ndr') + 7000}"
+    # QuickExpress always queues instructions and applies them asynchronously.
+    final = "rejected" if state == "rejected" else "pending"
+    if state == "accepted":
+        c.set_ndr_behaviour(body.get("awb", ""), "pending_then_accept")
+    response = {"result": "REJECTED", "instructionId": ref, "reason": reason} if final == "rejected" else {
+        "result": "QUEUED", "instructionId": ref}
+    c.ndr_store(key, {"awb": body.get("awb"), "state": final, "reason": reason, "response": response, "ref": ref})
+    return response
+
+
+@router.get("/ndr/instructions")
+async def ndr_instruction_status(idempotencyKey: str):
+    rec = c.ndr_lookup(idempotencyKey)
+    if rec is None:
+        from fastapi import HTTPException
+        raise HTTPException(404, "unknown instruction")
+    return {"state": {"accepted": "APPLIED", "rejected": "REJECTED", "pending": "QUEUED"}[rec["state"]],
+            "instructionId": rec["ref"], "reason": rec.get("reason")}
+
+
+def _webhook(s: c.MockShipment, status: str, event_id: str, at: datetime) -> dict:
     return {
         "eventId": event_id,
         "awb": s.tracking_number,

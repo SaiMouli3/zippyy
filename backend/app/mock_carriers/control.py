@@ -37,10 +37,12 @@ async def list_shipments():
 
 
 @router.post("/{carrier}/shipments/{tracking_number}/next-status")
-async def next_status(carrier: str, tracking_number: str, event: str | None = None, duplicate: bool = False):
+async def next_status(carrier: str, tracking_number: str, event: str | None = None, duplicate: bool = False,
+                      reason: str | None = None):
     """Advance one step and push the webhook to Zippy.
 
-    ?event=delivery_failed|rto simulates an exception from OUT_FOR_DELIVERY.
+    ?event=delivery_failed|rto|rto_delivered simulates an exception from OUT_FOR_DELIVERY (or RTO completion).
+    ?reason=CUSTOMER_UNAVAILABLE|REFUSED|ADDRESS_ISSUE|PHONE_UNREACHABLE|COD_NOT_READY for failed attempts.
     ?duplicate=true delivers the same webhook twice (idempotency demo).
     """
     module, webhook_slug = _carrier(carrier)
@@ -50,8 +52,8 @@ async def next_status(carrier: str, tracking_number: str, event: str | None = No
 
     if event:
         new = event.upper()
-        if new not in c.EXCEPTIONS:
-            raise HTTPException(400, "event must be delivery_failed or rto")
+        if new not in c.EXCEPTIONS | {"RTO_DELIVERED", "OUT_FOR_DELIVERY"}:
+            raise HTTPException(400, "event must be delivery_failed, rto, rto_delivered or out_for_delivery")
     else:
         new = c.next_status_of(s)
         if new is None:
@@ -60,14 +62,15 @@ async def next_status(carrier: str, tracking_number: str, event: str | None = No
     s.status, s.seq = new, s.seq + 1
     s.history.append(new)
     event_id = f"{s.tracking_number}-{s.seq}"
-    payload = module.build_webhook(s, new, event_id, c.utcnow())
+    payload = module.build_webhook(s, new, event_id, c.utcnow(), reason.upper() if reason else None)
+    raw, headers = c.sign_webhook(webhook_slug, payload)
 
     deliveries = []
     settings = get_settings()
     async with http.make_client(settings.zippy_public_url) as client:
         for _ in range(2 if duplicate else 1):
             try:
-                resp = await client.post(f"/api/webhooks/{webhook_slug}", json=payload)
+                resp = await client.post(f"/api/webhooks/{webhook_slug}", content=raw, headers=headers)
                 deliveries.append({"httpStatus": resp.status_code, "body": resp.json()})
             except Exception as exc:  # carrier-side: report, don't crash
                 deliveries.append({"error": str(exc)})
