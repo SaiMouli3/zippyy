@@ -55,6 +55,9 @@ class PreDeliveryWorkflow(Workflow):
             self.done("customer opted out")
             return
         lang = self.contact_language().language
+        if "whatsapp" not in self.cfg.channels:
+            self.on_deadline(data)  # no WhatsApp: go straight to the confirmation call (COD only)
+            return
         code = self.order.code or self.order.merchant_order_id
         try:
             self.tools.call("send_whatsapp_template", "Ask whether someone will be available today",

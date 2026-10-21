@@ -8,6 +8,7 @@ from app.platform import clock, intent as intent_svc, language as lang_svc, poli
 from app.platform.contact_guard import local_now
 from app.platform.models import (Address, AgentTask, Customer, IntentExtraction, Merchant, Message, NdrCase, Order,
                                  RuleDecision, Shipment, VoiceCall)
+from app.platform.providers.whatsapp import whatsapp_live
 from app.platform.tools import ToolBox, carrier_capabilities
 from app.platform.workflows.engine import RunRecorder
 
@@ -25,6 +26,9 @@ class Workflow:
         self.address = db.get(Address, self.order.address_id) if self.order.address_id else None
         self.case = db.get(NdrCase, task.ndr_case_id) if task.ndr_case_id else None
         self.cfg_version, self.cfg = policies.agent_config(db, self.merchant.id)
+        if "whatsapp" in self.cfg.channels and not whatsapp_live(self.merchant.is_demo):
+            # Live merchant, WhatsApp not connected yet: contact by voice instead of a message nobody receives.
+            self.cfg = self.cfg.model_copy(update={"channels": [c for c in self.cfg.channels if c != "whatsapp"]})
         self.carrier_caps = carrier_capabilities(db, self.shipment.carrier_code)
         self.rec = RunRecorder(db, task, self.merchant.id, self.agent_name, trigger)
         self.tools = ToolBox(self)

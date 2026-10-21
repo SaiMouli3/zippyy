@@ -174,6 +174,11 @@ class SimulatedWhatsApp(WhatsAppProvider):
         return Health("whatsapp:simulator", "simulated", "simulated", "Simulator: no real messages are sent")
 
 
+def whatsapp_live(merchant_is_demo: bool) -> bool:
+    """False when a real merchant would only get the simulator: its customers would never see the message."""
+    return merchant_is_demo or get_settings().whatsapp_provider != "simulator"
+
+
 def get_whatsapp(merchant_is_demo: bool) -> WhatsAppProvider:
     s = get_settings()
     if merchant_is_demo or s.whatsapp_provider == "simulator":
