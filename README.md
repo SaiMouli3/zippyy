@@ -142,12 +142,43 @@ first-party and no CORS is needed.
 | Integration | Live | Simulated (demo workspaces always use these) |
 |---|---|---|
 | WhatsApp | Meta Cloud API; inbound verified with `X-Hub-Signature-256`; webhook `GET/POST /api/v1/providers/whatsapp/meta` | Signed simulator replies through the same ingestion path |
+| WhatsApp (alternative) | Self-hosted [OpenWA](https://github.com/rmyndharis/OpenWA) gateway (unofficial); webhook `POST /api/v1/providers/whatsapp/openwa` signed with `X-OpenWA-Signature` | — |
 | Voice | Sarvam hosted voice agent, instant outbound; callback `POST /api/v1/providers/voice/sarvam?call=…&token=…` (per-call HMAC token, because Sarvam documents no webhook signature) | In-house conversation engine with scripted fictional customers |
 | Language & intent | Sarvam `/text-lid`, speech-to-text (`saaras`), text-to-speech (`bulbul:v3`), chat (`sarvam-105b`); or any OpenAI-compatible API (`INTENT_EXTRACTOR=openai_compatible` with `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`) | Heuristic script and lexicon detector, rule extractor |
 | Carriers | Adapters per carrier; webhooks `POST /api/webhooks/{fastship,quickexpress,reliable}` with `X-Carrier-Signature` | Mock carriers with behaviour controls (accept, reject, timeout-then-accept, pending, server error) |
 
 Demo data is fictional: `.test` email domains, generated `+91 90000 xxxxx` numbers, `DEMO` in every AWB, and "(Demo)" in every workspace name.
 A demo workspace cannot be switched to a live provider.
+
+## WhatsApp through OpenWA
+
+OpenWA drives WhatsApp Web through reverse-engineered clients, not Meta's official API. WhatsApp can restrict or ban
+the connected number, and OpenWA itself says cold first messages to people who never wrote to you are the most
+reliable way to get restricted. NDR outreach is exactly that, so:
+
+- connect a **dedicated number** you can afford to lose, warm it up first, and keep volumes low
+  (lower the daily caps in Contact policy, and set OpenWA's `SEND_PACING_ENABLED=true`);
+- move to the Meta Cloud API (`WHATSAPP_PROVIDER=meta_cloud`) for scale or anything regulated.
+
+Setup:
+
+1. Run OpenWA (`npm install && npm run dev`, dashboard on http://localhost:2886), create a session, scan the QR code
+   with the dedicated number, and create an **operator** API key scoped to that session.
+2. In OpenWA's environment set `RESOLVE_LID_TO_PHONE=true` (otherwise replies from customers WhatsApp hides behind a
+   privacy id cannot be matched), and, when Zippyy runs on the same machine or network, allow its host in
+   `SSRF_ALLOWED_HOSTS` (OpenWA refuses private webhook URLs by default).
+3. Register the webhook:
+   ```bash
+   curl -X POST http://localhost:2785/api/sessions/<SESSION_ID>/webhooks -H "X-API-Key: <KEY>" \
+     -H "Content-Type: application/json" -d '{"url": "<ZIPPYY_API>/api/v1/providers/whatsapp/openwa",
+     "events": ["message.received", "message.ack", "message.failed"], "secret": "<OPENWA_WEBHOOK_SECRET>"}'
+   ```
+4. Set `WHATSAPP_PROVIDER=openwa`, `OPENWA_BASE_URL=http://localhost:2785/api`, `OPENWA_API_KEY`, `OPENWA_SESSION_ID`
+   and `OPENWA_WEBHOOK_SECRET` for the API and the worker, and restart them.
+
+OpenWA has no Meta templates, so first-contact messages go out as the same approved template text, filled in, in the
+customer's language. Sends carry an `Idempotency-Key`, so a timed-out send is retried without risk of a duplicate.
+Demo workspaces keep using the simulator.
 
 ## Tests
 

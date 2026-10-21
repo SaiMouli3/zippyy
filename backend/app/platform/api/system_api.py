@@ -276,17 +276,29 @@ def integrations(p: Principal = Depends(require("integrations.read")), db: Sessi
     merchant = db.get(Merchant, p.merchant_id)
     sysdb = new_session(system=True)
     try:
+        wa_live_ready = (s.meta_access_token and s.meta_phone_number_id and s.meta_app_secret) if s.whatsapp_provider == "meta_cloud" \
+            else (s.openwa_base_url and s.openwa_api_key and s.openwa_session_id and s.openwa_webhook_secret) if s.whatsapp_provider == "openwa" \
+            else False
         wa_mode = "simulated" if (merchant.is_demo or s.whatsapp_provider == "simulator") else (
-            "live" if (s.meta_access_token and s.meta_phone_number_id and s.meta_app_secret) else "not_configured")
+            "live" if wa_live_ready else "not_configured")
+        wa_detail = {
+            "simulated": "Simulated for this workspace: no real messages are sent"
+                         + ("" if merchant.is_demo else ". Real customers are contacted by voice until WhatsApp is connected"),
+            "meta_cloud": "Meta Cloud API (official)",
+            "openwa": "OpenWA gateway (unofficial WhatsApp Web client). The connected number can be restricted or banned "
+                      "by WhatsApp; use a dedicated number and keep first-contact volume low",
+        }
         voice_mode = "simulated" if (merchant.is_demo or s.voice_provider == "simulator") else (
             "live" if (s.sarvam_agents_api_key and s.sarvam_app_id) else "not_configured")
         wa_stats = _provider_stats(sysdb, "whatsapp:")
         voice_stats = _provider_stats(sysdb, "voice:")
         providers = [
-            {"id": "whatsapp", "name": "WhatsApp Business", "provider": "simulator" if wa_mode == "simulated" else "meta_cloud",
+            {"id": "whatsapp", "name": "WhatsApp", "provider": "simulator" if wa_mode == "simulated" else s.whatsapp_provider,
              "mode": wa_mode, "state": _state(wa_stats, wa_mode), **wa_stats,
-             "detail": "Simulated for this workspace: no real messages are sent" if wa_mode == "simulated" else (
-                 "Meta Cloud API" if wa_mode == "live" else "Set META_PHONE_NUMBER_ID, META_ACCESS_TOKEN, META_APP_SECRET")},
+             "detail": wa_detail["simulated"] if wa_mode == "simulated" else (
+                 wa_detail.get(s.whatsapp_provider, s.whatsapp_provider) if wa_mode == "live" else
+                 "Set OPENWA_BASE_URL, OPENWA_API_KEY, OPENWA_SESSION_ID, OPENWA_WEBHOOK_SECRET" if s.whatsapp_provider == "openwa"
+                 else "Set META_PHONE_NUMBER_ID, META_ACCESS_TOKEN, META_APP_SECRET")},
             {"id": "voice", "name": "Sarvam voice agent", "provider": "simulator" if voice_mode == "simulated" else "sarvam_agents",
              "mode": voice_mode, "state": _state(voice_stats, voice_mode), **voice_stats,
              "detail": "Simulated: the in-house conversation engine plays scripted demo customers" if voice_mode == "simulated" else (
@@ -494,6 +506,12 @@ async def _provider(source: str, request: Request) -> dict:
 async def meta_webhook(request: Request):
     await _provider("whatsapp:meta_cloud", request)
     return {"ok": True}  # Meta expects 200 quickly; failures are in the inbox/quarantine
+
+
+@router.post("/api/v1/providers/whatsapp/openwa")
+async def openwa_webhook(request: Request):
+    await _provider("whatsapp:openwa", request)
+    return {"ok": True}
 
 
 @router.post("/api/v1/providers/voice/sarvam")

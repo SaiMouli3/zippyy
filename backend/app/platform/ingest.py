@@ -65,8 +65,8 @@ def ingest_webhook(db: Session, source: str, headers: dict, raw: bytes, query: d
     if kind == "carrier":
         ok, enforce = _verify_carrier(name, headers, raw)
     elif kind == "whatsapp":
-        from app.platform.providers.whatsapp import MetaCloudWhatsApp, SimulatedWhatsApp
-        provider = SimulatedWhatsApp() if name == "simulator" else MetaCloudWhatsApp()
+        from app.platform.providers.whatsapp import MetaCloudWhatsApp, OpenWAWhatsApp, SimulatedWhatsApp
+        provider = {"simulator": SimulatedWhatsApp, "openwa": OpenWAWhatsApp}.get(name, MetaCloudWhatsApp)()
         ok, enforce = provider.verify_signature(headers, raw), True
     elif kind == "voice":
         from app.platform.providers.voice import provider_by_name
@@ -120,6 +120,8 @@ def _dedupe_key(kind: str, name: str, payload: dict, raw: bytes) -> str:
                 return f"evt:{ev.event_id}"
         except Exception:  # noqa: BLE001 - unparseable payloads still get a content hash key
             pass
+    if kind == "whatsapp" and name == "openwa" and payload.get("idempotencyKey"):
+        return f"openwa:{payload['idempotencyKey']}"
     if kind == "voice" and "attempt_id" in payload:
         return f"{payload['attempt_id']}:{payload.get('status')}"
     if kind == "voice" and "event_id" in payload:

@@ -10,6 +10,12 @@ status webhooks.
 `SimulatedWhatsApp` is for development, tests and demo merchants. It returns synthetic message ids and
 schedules simulated provider callbacks (see app/platform/simulation), which then travel through exactly the
 same signed-webhook ingestion path as real callbacks.
+
+`OpenWAWhatsApp` talks to a self-hosted OpenWA gateway (github.com/rmyndharis/OpenWA), which drives WhatsApp Web
+through unofficial clients. It has no Meta templates, so business-initiated messages go out as the already-filled
+template text. Its API: POST {base}/sessions/{id}/messages/send-text with X-API-Key and Idempotency-Key headers;
+webhooks are signed X-OpenWA-Signature = "sha256=" + HMAC-SHA256(secret, raw_body). Using it carries a real risk
+of the WhatsApp number being restricted; see the README.
 """
 import json
 from datetime import datetime, timezone
@@ -29,6 +35,7 @@ META_LANG = {"en": "en", "hi": "hi", "te": "te", "ta": "ta", "kn": "kn", "ml": "
 class WhatsAppProvider:
     name = "base"
     mode = "live"
+    supports_templates = True  # False: send business-initiated messages as the rendered template text
 
     def send_template(self, db, merchant_id: str, to_e164: str, template_name: str, language: str,
                       params: list[str], idempotency_key: str) -> SendResult:
@@ -174,6 +181,98 @@ class SimulatedWhatsApp(WhatsAppProvider):
         return Health("whatsapp:simulator", "simulated", "simulated", "Simulator: no real messages are sent")
 
 
+_OPENWA_STATUS = {"sent": "sent", "delivered": "delivered", "read": "read", "failed": "failed"}
+
+
+def _openwa_phone(chat_id: str | None, sender_phone: str | None) -> str | None:
+    if sender_phone:
+        return "+" + "".join(ch for ch in str(sender_phone) if ch.isdigit())
+    if chat_id and chat_id.endswith("@c.us"):
+        return "+" + chat_id.split("@", 1)[0]
+    return None  # @lid privacy id without senderPhone: cannot be matched to a customer
+
+
+def parse_openwa_payload(payload: dict) -> tuple[list[WhatsAppStatusEvent], list[WhatsAppInbound]]:
+    event = payload.get("event")
+    data = payload.get("data") or {}
+    statuses: list[WhatsAppStatusEvent] = []
+    inbound: list[WhatsAppInbound] = []
+    if event in ("message.ack", "message.failed"):
+        status = _OPENWA_STATUS.get(str(data.get("status") or ("failed" if event == "message.failed" else "")))
+        mid = data.get("messageId") or data.get("id")
+        if status and mid:
+            at = datetime.fromisoformat(str(payload.get("timestamp")).replace("Z", "+00:00")) if payload.get("timestamp") \
+                else datetime.now(timezone.utc)
+            statuses.append(WhatsAppStatusEvent(provider_message_id=str(mid), status=status, occurred_at=at,
+                                                provider_event_id=f"{mid}:{status}",
+                                                error_title="WhatsApp reported the message as failed" if status == "failed" else None))
+    elif event == "message.received":
+        if data.get("fromMe") or data.get("isGroup") or data.get("kind", "individual") != "individual":
+            return statuses, inbound
+        phone = _openwa_phone(data.get("from") or data.get("chatId"), data.get("senderPhone"))
+        if phone and data.get("id"):
+            mtype = data.get("type") or "text"
+            text = data.get("body") or "" if mtype == "text" else (data.get("body") or f"[{mtype} message]")
+            inbound.append(WhatsAppInbound(provider_message_id=str(data["id"]), from_e164=phone, text=text,
+                                           occurred_at=_ts(data.get("timestamp") or 0), message_type=mtype))
+    return statuses, inbound
+
+
+class OpenWAWhatsApp(WhatsAppProvider):
+    name = "openwa"
+    mode = "live"
+    supports_templates = False
+
+    def __init__(self):
+        s = get_settings()
+        missing = [n for n, v in (("OPENWA_BASE_URL", s.openwa_base_url), ("OPENWA_API_KEY", s.openwa_api_key),
+                                  ("OPENWA_SESSION_ID", s.openwa_session_id), ("OPENWA_WEBHOOK_SECRET", s.openwa_webhook_secret)) if not v]
+        if missing:
+            raise ProviderNotConfigured("OpenWA not configured: " + ", ".join(missing))
+        self.url = f"{s.openwa_base_url.rstrip('/')}/sessions/{s.openwa_session_id}/messages/send-text"
+        self.key = s.openwa_api_key
+        self.secret = s.openwa_webhook_secret
+        self.timeout = s.provider_timeout_seconds
+
+    def send_template(self, db, merchant_id, to_e164, template_name, language, params, idempotency_key):
+        raise ProviderError("OpenWA has no message templates; send the rendered text", "unsupported")
+
+    def send_text(self, db, merchant_id, to_e164, body, idempotency_key):
+        chat_id = "".join(ch for ch in to_e164 if ch.isdigit()) + "@c.us"
+        with Timer() as t:
+            try:
+                resp = httpx.post(self.url, json={"chatId": chat_id, "text": body[:4096]}, timeout=self.timeout,
+                                  headers={"X-API-Key": self.key, "Idempotency-Key": idempotency_key[:200]})
+            except httpx.TimeoutException as exc:
+                # OpenWA honours Idempotency-Key, so a retry with the same key cannot send a second message.
+                log_call(db, merchant_id, "whatsapp:openwa", "send_text", False, int(self.timeout * 1000), None, "timeout")
+                raise ProviderError("OpenWA send timed out; retrying with the same idempotency key", "timeout", True) from exc
+            except httpx.HTTPError as exc:
+                log_call(db, merchant_id, "whatsapp:openwa", "send_text", False, 0, None, "network")
+                raise ProviderError(f"OpenWA network error: {type(exc).__name__}", "network", True) from exc
+        if resp.status_code >= 400:
+            try:
+                err = resp.json()
+            except ValueError:
+                err = {}
+            code = str(err.get("code") or resp.status_code)
+            log_call(db, merchant_id, "whatsapp:openwa", "send_text", False, t.ms, resp.status_code, code)
+            # 409: session reconnecting or WhatsApp Web reloading; 429/5xx: transient. 4xx otherwise: our request or key.
+            retryable = resp.status_code in (409, 429) or resp.status_code >= 500
+            raise ProviderError(f"OpenWA error {code}: {str(err.get('message', ''))[:120]}", code, retryable, resp.status_code)
+        log_call(db, merchant_id, "whatsapp:openwa", "send_text", True, t.ms, resp.status_code)
+        return SendResult(provider_message_id=str(resp.json()["messageId"]))
+
+    def verify_signature(self, headers: dict, raw_body: bytes) -> bool:
+        return crypto.verify_signature(raw_body, self.secret, headers.get("x-openwa-signature"), "sha256=")
+
+    def parse_webhook(self, payload):
+        return parse_openwa_payload(payload)
+
+    def health(self) -> Health:
+        return Health("whatsapp:openwa", "live", "connected", "OpenWA gateway configured; state from recent calls")
+
+
 def whatsapp_live(merchant_is_demo: bool) -> bool:
     """False when a real merchant would only get the simulator: its customers would never see the message."""
     return merchant_is_demo or get_settings().whatsapp_provider != "simulator"
@@ -187,4 +286,6 @@ def get_whatsapp(merchant_is_demo: bool) -> WhatsAppProvider:
         return SimulatedWhatsApp()
     if s.whatsapp_provider == "meta_cloud":
         return MetaCloudWhatsApp()
+    if s.whatsapp_provider == "openwa":
+        return OpenWAWhatsApp()
     raise ProviderNotConfigured(f"unknown WHATSAPP_PROVIDER {s.whatsapp_provider}")

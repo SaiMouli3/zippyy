@@ -59,7 +59,12 @@ class Settings(BaseSettings):
     carrier_webhook_signature_required: bool = False  # MVP mock carriers do not sign; set true in production
 
     # ---- providers ------------------------------------------------------------------------------
-    whatsapp_provider: str = "simulator"  # simulator | meta_cloud
+    whatsapp_provider: str = "simulator"  # simulator | meta_cloud | openwa
+    # OpenWA (self-hosted, unofficial WhatsApp Web gateway; see README for the ban-risk warning)
+    openwa_base_url: str = ""  # e.g. http://localhost:2785/api
+    openwa_api_key: str = ""
+    openwa_session_id: str = ""
+    openwa_webhook_secret: str = ""
     meta_graph_api_version: str = "v21.0"
     meta_phone_number_id: str = ""
     meta_access_token: str = ""
@@ -113,6 +118,8 @@ class Settings(BaseSettings):
             problems.append("PII_HASH_KEY")
         if self.voice_webhook_secret == _DEV_WEBHOOK_SECRET:
             problems.append("VOICE_WEBHOOK_SECRET")
+        if self.whatsapp_provider == "openwa" and len(self.openwa_webhook_secret) < 16:
+            problems.append("OPENWA_WEBHOOK_SECRET (16+ characters) is required with WHATSAPP_PROVIDER=openwa")
         if not self.session_cookie_secure:
             problems.append("SESSION_COOKIE_SECURE must be true")
         if problems:

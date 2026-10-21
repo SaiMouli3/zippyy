@@ -142,7 +142,7 @@ def handle_send_message(db: Session, job) -> None:
     provider = get_whatsapp(merchant.is_demo)
     to = phone_e164(customer)
     try:
-        if job.payload.get("session"):
+        if job.payload.get("session") or not provider.supports_templates:
             result = provider.send_text(db, merchant.id, to, msg.body, msg.idempotency_key or msg.id)
         else:
             result = provider.send_template(db, merchant.id, to, job.payload["template_name"], msg.language or "en",
@@ -279,5 +279,7 @@ def process_webhook_payload(db: Session, provider: str, payload: dict) -> dict:
 
 
 def get_provider_parser(provider: str):
-    from app.platform.providers.whatsapp import parse_meta_payload
+    from app.platform.providers.whatsapp import parse_meta_payload, parse_openwa_payload
+    if provider == "openwa":
+        return parse_openwa_payload
     return parse_meta_payload  # simulator and Meta share the Cloud API webhook shape
